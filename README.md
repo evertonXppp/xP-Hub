@@ -1,2 +1,0 @@
-# xP-Hub
-xP Hub
