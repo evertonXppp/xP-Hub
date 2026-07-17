@@ -1,7 +1,7 @@
 --[[
     xP Hub — Enhanced ESP Edition
     Aimbot | ESP Box (outline), Heart Bar, Skeleton | Config
-    Menu Key: LeftAlt
+    Menu Key: LeftAlt (ALT esquerdo)
     Creator: evertonXpp
 ]]
 
@@ -48,7 +48,7 @@ local Settings = {
     ESPSkeleton = false,
 
     BoxSizeMultiplier = 1.4,
-    MenuKey = Enum.KeyCode.LeftAlt,  -- ALTERADO PARA ALT ESQUERDO
+    MenuKey = Enum.KeyCode.LeftAlt,  -- DEFINIDO COMO ALT ESQUERDO
 }
 
 --// STATE
@@ -539,7 +539,7 @@ local function BuildUI()
     local mkl = Instance.new("TextLabel", mkf)
     mkl.Size = UDim2.new(1, -130, 1, 0)
     mkl.BackgroundTransparency = 1
-    mkl.Text = "Menu Key: LeftAlt"  -- ALTERADO
+    mkl.Text = "Menu Key: LeftAlt"
     mkl.TextColor3 = Theme.Text
     mkl.Font = Enum.Font.SourceSans
     mkl.TextSize = 16
