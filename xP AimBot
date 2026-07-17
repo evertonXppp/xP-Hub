@@ -1,6 +1,7 @@
 --[[
     xP Hub — Enhanced ESP Edition
     Aimbot | ESP Box (outline), Heart Bar, Skeleton | Config
+    Menu Key: LeftAlt
     Creator: evertonXpp
 ]]
 
@@ -46,8 +47,8 @@ local Settings = {
     ESPHeartBar = false,
     ESPSkeleton = false,
 
-    BoxSizeMultiplier = 1.4,  -- igual ao xP Hub.lua
-    MenuKey = Enum.KeyCode.RightControl,
+    BoxSizeMultiplier = 1.4,
+    MenuKey = Enum.KeyCode.LeftAlt,  -- ALTERADO PARA ALT ESQUERDO
 }
 
 --// STATE
@@ -538,7 +539,7 @@ local function BuildUI()
     local mkl = Instance.new("TextLabel", mkf)
     mkl.Size = UDim2.new(1, -130, 1, 0)
     mkl.BackgroundTransparency = 1
-    mkl.Text = "Menu Key: RightControl"
+    mkl.Text = "Menu Key: LeftAlt"  -- ALTERADO
     mkl.TextColor3 = Theme.Text
     mkl.Font = Enum.Font.SourceSans
     mkl.TextSize = 16
@@ -776,7 +777,7 @@ RunService.RenderStepped:Connect(function()
             data.Tracer.Visible = true
         end
 
-        -- BOX + OUTLINE (tamanho baseado na distância cabeça-root, igual xP Hub.lua)
+        -- BOX + OUTLINE
         if Settings.ESPBoxes then
             local height = math.abs(headPos.Y - rootPos.Y) * 2 * Settings.BoxSizeMultiplier
             local width = height / 2
@@ -795,7 +796,7 @@ RunService.RenderStepped:Connect(function()
             data.Box.Color = color
             data.Box.Visible = true
 
-            -- INFO (nome, HP, distância)
+            -- INFO
             if Settings.ESPInfo then
                 data.Info.Position = Vector2.new(screenRoot.X, posY - 20)
                 data.Info.Text = player.Name .. "\nHP:" .. hp .. "/" .. maxHp .. " | " .. math.floor(dist) .. "s"
@@ -803,7 +804,7 @@ RunService.RenderStepped:Connect(function()
                 data.Info.Visible = true
             end
 
-            -- HEART BAR (mesma altura da box)
+            -- HEART BAR
             if Settings.ESPHeartBar then
                 local lineX = posX + width + 6
 
