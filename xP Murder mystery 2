@@ -1,0 +1,376 @@
+-- ============================================================
+-- xP Murder Mystery 2 (com Obsidian UI)
+-- Criado por evertonXpp
+-- ============================================================
+
+-- Carregar a Obsidian UI Library
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+Library.ForceCheckbox = false
+Library.ShowToggleFrameInKeybinds = true
+
+-- Variáveis globais da biblioteca
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- Criar a janela principal
+local Window = Library:CreateWindow({
+    Title = "xP Murder mystery",
+    Footer = "by evertonXpp",
+    Icon = nil,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+-- Criar a aba única "MM2"
+local MM2Tab = Window:AddTab("MM2", "sword")
+
+-- ============================================================
+-- BACKEND DO MM2 (código original adaptado)
+-- ============================================================
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+
+local Murder, Sheriff, Hero
+local roles
+local playerData = {}
+
+local notifContainer = nil
+
+local function criarContainerNotificacao()
+    if notifContainer then return end
+    notifContainer = Instance.new("Frame")
+    notifContainer.Name = "Notificacoes"
+    notifContainer.Size = UDim2.new(0, 400, 0, 0)
+    notifContainer.Position = UDim2.new(0.5, -200, 0.05, 0)
+    notifContainer.BackgroundTransparency = 1
+    notifContainer.Parent = LP:WaitForChild("PlayerGui")
+    local layout = Instance.new("UIListLayout", notifContainer)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 5)
+    layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+end
+
+function notificar(texto)
+    criarContainerNotificacao()
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 40)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BackgroundTransparency = 0.1
+    frame.BorderSizePixel = 0
+    frame.Parent = notifContainer
+
+    local corner = Instance.new("UICorner", frame)
+    corner.CornerRadius = UDim.new(0, 8)
+
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, -10, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Text = texto
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+
+    task.delay(3, function()
+        if frame and frame.Parent then
+            frame:Destroy()
+        end
+    end)
+end
+
+function getMap()
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:FindFirstChild("CoinContainer") and obj:FindFirstChild("Spawns") then
+            return obj
+        end
+    end
+    return nil
+end
+
+function findMurderer()
+    if Murder and Players:FindFirstChild(Murder) then
+        return Players:FindFirstChild(Murder)
+    end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LP then
+            if plr.Backpack:FindFirstChild("Knife") or (plr.Character and plr.Character:FindFirstChild("Knife")) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+function findSheriff()
+    if Sheriff and Players:FindFirstChild(Sheriff) then
+        return Players:FindFirstChild(Sheriff)
+    end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LP then
+            if plr.Backpack:FindFirstChild("Gun") or (plr.Character and plr.Character:FindFirstChild("Gun")) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+function IsAlive(playerName)
+    if playerData and playerData[playerName] then
+        return not playerData[playerName].Killed and not playerData[playerName].Dead
+    end
+    return false
+end
+
+-- Variáveis de ESP
+local espMurderer = false
+local espSheriff = false
+local espHero = false
+local espInnocent = false
+local hideOwnESP = true
+local gunDropESP = false
+local gunDropHighlight = nil
+
+function CreateHighlight()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        if plr.Character and not plr.Character:FindFirstChild("Highlight") then
+            local hl = Instance.new("Highlight", plr.Character)
+            hl.Name = "Highlight"
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.FillTransparency = 0.4
+            hl.OutlineTransparency = 0.2
+            hl.Enabled = false
+        end
+    end
+end
+
+function UpdateHighlights()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        local hl = plr.Character and plr.Character:FindFirstChild("Highlight")
+        if not hl then continue end
+
+        local papel = "Innocent"
+        if plr.Name == Murder and IsAlive(plr.Name) then papel = "Murderer"
+        elseif plr.Name == Sheriff and IsAlive(plr.Name) then papel = "Sheriff"
+        elseif plr.Name == Hero and IsAlive(plr.Name) and not IsAlive(Sheriff) then papel = "Hero"
+        end
+
+        local enable = false
+        local cor = Color3.fromRGB(0, 225, 0)
+        if papel == "Murderer" and espMurderer then
+            enable = true
+            cor = Color3.fromRGB(225, 0, 0)
+        elseif papel == "Sheriff" and espSheriff then
+            enable = true
+            cor = Color3.fromRGB(0, 0, 225)
+        elseif papel == "Hero" and espHero then
+            enable = true
+            cor = Color3.fromRGB(255, 250, 0)
+        elseif papel == "Innocent" and espInnocent then
+            enable = true
+            cor = Color3.fromRGB(0, 225, 0)
+        end
+
+        hl.Enabled = enable
+        if enable then
+            hl.FillColor = cor
+            hl.OutlineColor = cor
+        end
+    end
+end
+
+function refreshHighlights()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            local hl = plr.Character:FindFirstChild("Highlight")
+            if hl then hl:Destroy() end
+        end
+    end
+    CreateHighlight()
+    UpdateHighlights()
+end
+
+function updateGunDropESP()
+    if gunDropHighlight then
+        gunDropHighlight:Destroy()
+        gunDropHighlight = nil
+    end
+    local map = getMap()
+    if gunDropESP and map and map:FindFirstChild("GunDrop") then
+        local drop = map:FindFirstChild("GunDrop")
+        gunDropHighlight = Instance.new("Highlight")
+        gunDropHighlight.Name = "GunDropESP"
+        gunDropHighlight.Adornee = drop
+        gunDropHighlight.FillColor = Color3.fromRGB(255, 255, 0)
+        gunDropHighlight.OutlineColor = Color3.fromRGB(255, 200, 0)
+        gunDropHighlight.FillTransparency = 0.3
+        gunDropHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        gunDropHighlight.Parent = workspace
+        notificar("Arma dropada! Destaque amarelo.")
+    end
+end
+
+workspace.DescendantAdded:Connect(function(child)
+    if child.Name == "GunDrop" and child:IsA("BasePart") then
+        updateGunDropESP()
+    end
+end)
+
+workspace.DescendantRemoving:Connect(function(child)
+    if child.Name == "GunDrop" and child:IsA("BasePart") then
+        if gunDropHighlight then
+            gunDropHighlight:Destroy()
+            gunDropHighlight = nil
+        end
+        notificar("Arma dropada foi recolhida ou sumiu.")
+    end
+end)
+
+function teleportToDroppedGun()
+    local map = getMap()
+    if not map then notificar("Mapa não encontrado.") return end
+    local drop = map:FindFirstChild("GunDrop")
+    if not drop then notificar("Nenhuma arma dropada.") return end
+    local char = LP.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        notificar("Personagem não disponível.")
+        return
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local oldPos = hrp.CFrame
+    hrp.CFrame = drop.CFrame + Vector3.new(0, 2, 0)
+    task.wait(0.3)
+    hrp.CFrame = oldPos
+    notificar("Teleportado para a arma e voltado.")
+end
+
+-- ============================================================
+-- CRIAÇÃO DA INTERFACE COM OBSIDIAN UI
+-- ============================================================
+
+-- Grupo ESP (lado esquerdo)
+local ESPGroup = MM2Tab:AddLeftGroupbox("ESP Options")
+
+ESPGroup:AddToggle("MurdererESP", {
+    Text = "ESP Assassino",
+    Default = false,
+    Tooltip = "Destaca o assassino em vermelho",
+    Callback = function(Value)
+        espMurderer = Value
+        UpdateHighlights()
+    end
+})
+
+ESPGroup:AddToggle("SheriffESP", {
+    Text = "ESP Xerife",
+    Default = false,
+    Tooltip = "Destaca o xerife em azul",
+    Callback = function(Value)
+        espSheriff = Value
+        UpdateHighlights()
+    end
+})
+
+ESPGroup:AddToggle("HeroESP", {
+    Text = "ESP Herói",
+    Default = false,
+    Tooltip = "Destaca o herói em amarelo",
+    Callback = function(Value)
+        espHero = Value
+        UpdateHighlights()
+    end
+})
+
+ESPGroup:AddToggle("InnocentESP", {
+    Text = "ESP Inocentes",
+    Default = false,
+    Tooltip = "Destaca todos os inocentes em verde",
+    Callback = function(Value)
+        espInnocent = Value
+        UpdateHighlights()
+    end
+})
+
+ESPGroup:AddDivider()
+
+ESPGroup:AddToggle("GunDropESP", {
+    Text = "ESP Arma Dropada",
+    Default = false,
+    Tooltip = "Destaca a arma no chão em amarelo",
+    Callback = function(Value)
+        gunDropESP = Value
+        updateGunDropESP()
+    end
+})
+
+-- Grupo Ações (lado direito)
+local ActionGroup = MM2Tab:AddRightGroupbox("Ações")
+
+ActionGroup:AddButton({
+    Text = "Teleportar para arma dropada",
+    Func = teleportToDroppedGun,
+    Tooltip = "Teleporta você até a arma e volta instantaneamente",
+})
+
+-- Grupo da tecla de atalho (parte inferior esquerda)
+local KeyGroup = MM2Tab:AddLeftGroupbox("Tecla do Menu")
+
+-- Cria um Label e depois adiciona o KeyPicker a ele (forma correta)
+local menuLabel = KeyGroup:AddLabel("Key Bind (abrir/fechar)")
+menuLabel:AddKeyPicker("MenuKeybind", {
+    Default = "LeftAlt",
+    Text = "Menu Keybind",
+    Mode = "Toggle",
+    NoUI = false,
+    ChangedCallback = function(NewKey, NewModifiers)
+        if Options and Options.MenuKeybind then
+            Library.ToggleKeybind = Options.MenuKeybind
+        end
+    end
+})
+
+-- Definir a tecla de atalho da biblioteca após a criação
+task.spawn(function()
+    wait(0.1)
+    if Options and Options.MenuKeybind then
+        Library.ToggleKeybind = Options.MenuKeybind
+    else
+        Library.ToggleKeybind = "LeftAlt"
+    end
+end)
+
+-- ============================================================
+-- LOOP PRINCIPAL PARA DETECÇÃO DE PAPÉIS
+-- ============================================================
+
+RunService.RenderStepped:Connect(function()
+    local success, data = pcall(function()
+        return ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+    end)
+    if success and data then
+        roles = data
+        playerData = data
+        for nome, info in pairs(data) do
+            if info.Role == "Murderer" then Murder = nome
+            elseif info.Role == "Sheriff" then Sheriff = nome
+            elseif info.Role == "Hero" then Hero = nome
+            end
+        end
+        CreateHighlight()
+        UpdateHighlights()
+    end
+end)
+
+notificar("xP MM2 carregado.")
