@@ -1,9 +1,3 @@
--- ============================================================
--- xP Murder Mystery 2 (com Obsidian UI)
--- Criado por evertonXpp
--- ============================================================
-
--- Carregar a Obsidian UI Library
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
