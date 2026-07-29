@@ -468,4 +468,3 @@
             end
         end)
         SendNotification("xP Blade Ball", "Script carregado com sucesso!", 4)
-    end
