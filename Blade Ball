@@ -1,0 +1,471 @@
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local CoreGui = game:GetService("CoreGui")
+        local Workspace = game:GetService("Workspace")
+        local Lighting = game:GetService("Lighting")
+        local TweenService = game:GetService("TweenService")
+        local Player = Players.LocalPlayer
+        local Parried = false
+        local LastParry = 0
+        local LastAbility = 0
+        local SpamActive = false
+        local AutoWinActive = false
+        local AutoDetectSpamActive = false
+        local ParryCounter = 0
+        local MenuVisible = true
+        local OptimizedMode = false
+        local savedLighting = {}
+        local savedParticleStates = {}
+        local initialFOV = workspace.CurrentCamera.FieldOfView or 70
+        local Settings = {
+            AutoParry = false,
+            PanicAbility = false,
+            AutoSpam = false,
+            AutoWin = false,
+            AutoDetectSpam = false,
+            ReactionTime = 0.38,
+            PanicDistance = 25,
+            SpamSpeed = 5,
+            Otimizacao = false
+        }
+        pcall(function()
+            local oh = getrawmetatable and getrawmetatable(game) or getmetatable(game)
+            if oh then
+                local old = oh.__namecall
+                setreadonly(oh, false)
+                oh.__namecall = function(self, ...)
+                    local method = getnamecallmethod()
+                    if method == "Kick" or method == "Ban" then
+                        return nil
+                    end
+                    return old(self, ...)
+                end
+                setreadonly(oh, true)
+            end
+        end)
+        local function SetParticlesEnabled(enabled)
+            if enabled then
+                for inst, state in pairs(savedParticleStates) do
+                    if inst and inst.Parent then
+                        pcall(function() inst.Enabled = state end)
+                    end
+                end
+                savedParticleStates = {}
+            else
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    local t = obj.ClassName
+                    if t == "ParticleEmitter" or t == "Trail" or t == "Beam" or t == "Smoke" or t == "Fire" then
+                        if savedParticleStates[obj] == nil then
+                            pcall(function() savedParticleStates[obj] = obj.Enabled end)
+                        end
+                        pcall(function() obj.Enabled = false end)
+                    end
+                end
+            end
+        end
+        local function SetFogDisabled(disabled)
+            pcall(function()
+                if not disabled then
+                    if savedLighting.FogStart ~= nil then
+                        Lighting.FogStart = savedLighting.FogStart
+                        Lighting.FogEnd = savedLighting.FogEnd
+                        Lighting.FogColor = savedLighting.FogColor
+                    end
+                    savedLighting.FogStart = nil
+                else
+                    if savedLighting.FogStart == nil then
+                        savedLighting.FogStart = Lighting.FogStart
+                        savedLighting.FogEnd = Lighting.FogEnd
+                        savedLighting.FogColor = Lighting.FogColor
+                    end
+                    Lighting.FogStart = 0
+                    Lighting.FogEnd = 9e9
+                end
+            end)
+        end
+        local function SetLowGraphics(on)
+            pcall(function()
+                if on then
+                    if savedLighting.GlobalShadows == nil then
+                        savedLighting.GlobalShadows = Lighting.GlobalShadows
+                        savedLighting.Ambient = Lighting.Ambient
+                        savedLighting.Brightness = Lighting.Brightness
+                    end
+                    Lighting.GlobalShadows = false
+                    Lighting.Ambient = Color3.fromRGB(180, 180, 180)
+                    Lighting.Brightness = math.max(0, (Lighting.Brightness or 1) * 0.7)
+                    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+                else
+                    if savedLighting.GlobalShadows ~= nil then
+                        Lighting.GlobalShadows = savedLighting.GlobalShadows
+                        Lighting.Ambient = savedLighting.Ambient
+                        Lighting.Brightness = savedLighting.Brightness
+                        savedLighting.GlobalShadows = nil
+                    end
+                end
+            end)
+        end
+        local function SetOptimizedMode(on)
+            OptimizedMode = on
+            if on then
+                SetFogDisabled(true)
+                SetParticlesEnabled(false)
+                SetLowGraphics(true)
+            else
+                SetFogDisabled(false)
+                SetParticlesEnabled(true)
+                SetLowGraphics(false)
+            end
+        end
+        local function GetRealBall()
+            local balls = Workspace:FindFirstChild("Balls")
+            if not balls then return nil end
+            for _, ball in ipairs(balls:GetChildren()) do
+                if ball:IsA("BasePart") and ball:GetAttribute("realBall") == true then
+                    return ball
+                end
+            end
+            return nil
+        end
+        local function IsTargeted(ball)
+            if not ball then return false end
+            return ball:GetAttribute("target") == Player.Name
+        end
+        local function GetDistanceToBall(ball)
+            local char = Player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not ball then return math.huge end
+            return (hrp.Position - ball.Position).Magnitude
+        end
+        local function GetBallSpeed(ball)
+            if not ball then return 0 end
+            if ball:FindFirstChild("zoomies") then
+                return ball.zoomies.VectorVelocity.Magnitude
+            end
+            return ball.Velocity.Magnitude
+        end
+        local function SendParry()
+            if tick() - LastParry < 0.1 then return end
+            LastParry = tick()
+            pcall(function()
+                local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                if Remotes then
+                    local ParryRemote = Remotes:FindFirstChild("ParryButtonPress") or Remotes:FindFirstChild("Parry")
+                    if ParryRemote then
+                        ParryRemote:FireServer()
+                        return
+                    end
+                end
+            end)
+            pcall(function()
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                task.wait(0.012)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            end)
+        end
+        local function SendAbility()
+            if tick() - LastAbility < 1.2 then return end
+            LastAbility = tick()
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+            end)
+        end
+        local function AutoWinLogic()
+            if not AutoWinActive then return end
+            for _, ball in ipairs(Workspace.Balls:GetChildren()) do
+                if ball and ball:IsA("BasePart") and ball:GetAttribute("realBall") then
+                    local char = Player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = CFrame.new(hrp.Position, ball.Position)
+                        if IsTargeted(ball) then
+                            SendParry()
+                        end
+                    end
+                end
+            end
+        end
+        local function GetNearestPlayer()
+            local nearest = nil
+            local minDist = math.huge
+            local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return nil end
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= Player then
+                    local char = plr.Character
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            nearest = plr
+                        end
+                    end
+                end
+            end
+            return nearest
+        end
+        local function AutoDetectSpamLogic(ball)
+            if not AutoDetectSpamActive or not ball then
+                SpamActive = false
+                return
+            end
+            local nearest = GetNearestPlayer()
+            if not nearest then
+                SpamActive = false
+                return
+            end
+            local nearestChar = nearest.Character
+            if not nearestChar or not nearestChar:FindFirstChild("HumanoidRootPart") then
+                SpamActive = false
+                return
+            end
+            local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                SpamActive = false
+                return
+            end
+            local playerDist = (hrp.Position - nearestChar.HumanoidRootPart.Position).Magnitude
+            local ballDist = GetDistanceToBall(ball)
+            local detectDistance = 25 + math.clamp(ParryCounter / 3, 0, 25)
+            SpamActive = (ParryCounter > 2 and playerDist < detectDistance and ballDist < 55)
+        end
+        local function AutoSpamLogic()
+            if not Settings.AutoSpam or not SpamActive then return end
+            for i = 1, math.floor(Settings.SpamSpeed) do
+                SendParry()
+                task.wait(0.03)
+            end
+        end
+        RunService.PreSimulation:Connect(function()
+            if AutoWinActive then
+                AutoWinLogic()
+                return
+            end
+            if Settings.AutoParry or Settings.PanicAbility then
+                local ball = GetRealBall()
+                if not ball then return end
+                local char = Player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+                local distance = GetDistanceToBall(ball)
+                local velocity = GetBallSpeed(ball)
+                if velocity < 3 then return end
+                local timeToImpact = (distance - 2.5) / velocity
+                pcall(function()
+                    ball:GetAttributeChangedSignal("target"):Connect(function()
+                        local target = ball:GetAttribute("target")
+                        local nearest = GetNearestPlayer()
+                        if nearest then
+                            if target == nearest.Name or target == Player.Name then
+                                ParryCounter = ParryCounter + 1
+                            else
+                                ParryCounter = 0
+                            end
+                        end
+                    end)
+                end)
+                AutoDetectSpamLogic(ball)
+                AutoSpamLogic()
+                if Settings.AutoParry and IsTargeted(ball) and timeToImpact <= Settings.ReactionTime then
+                    if not Parried then
+                        SendParry()
+                        Parried = true
+                        task.delay(0.5, function() Parried = false end)
+                    end
+                end
+                if Settings.PanicAbility and distance <= Settings.PanicDistance then
+                    SendAbility()
+                end
+            end
+        end)
+        pcall(function()
+            Workspace:WaitForChild("Balls").ChildAdded:Connect(function()
+                task.wait(0.15)
+                Parried = false
+            end)
+        end)
+        local function SendNotification(Title, Text, Duration)
+            pcall(function()
+                game:GetService("StarterGui"):SetCore("SendNotification", {
+                    Title = Title,
+                    Text = Text,
+                    Duration = Duration or 3,
+                    Icon = "rbxassetid://71941191072049"
+                })
+            end)
+        end
+        local ScreenGui = Instance.new("ScreenGui")
+        ScreenGui.Name = "xPBladeBallGUI"
+        ScreenGui.Parent = CoreGui
+        ScreenGui.ResetOnSpawn = false
+        ScreenGui.Enabled = true
+        local MainFrame = Instance.new("Frame")
+        MainFrame.Size = UDim2.new(0, 300, 0, 490)
+        MainFrame.Position = UDim2.new(0.5, -150, 0.4, -245)
+        MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+        MainFrame.BackgroundTransparency = 0.1
+        MainFrame.BorderSizePixel = 0
+        MainFrame.Active = true
+        MainFrame.Draggable = true
+        MainFrame.Parent = ScreenGui
+        local MainCorner = Instance.new("UICorner")
+        MainCorner.CornerRadius = UDim.new(0, 12)
+        MainCorner.Parent = MainFrame
+        local Stroke = Instance.new("UIStroke")
+        Stroke.Color = Color3.fromRGB(60, 60, 70)
+        Stroke.Thickness = 1.5
+        Stroke.Transparency = 0.2
+        Stroke.Parent = MainFrame
+        local TitleBar = Instance.new("Frame")
+        TitleBar.Size = UDim2.new(1, 0, 0, 45)
+        TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+        TitleBar.BackgroundTransparency = 0
+        TitleBar.BorderSizePixel = 0
+        TitleBar.Parent = MainFrame
+        local TitleCorner = Instance.new("UICorner")
+        TitleCorner.CornerRadius = UDim.new(0, 12)
+        TitleCorner.Parent = TitleBar
+        local TitleLabel = Instance.new("TextLabel")
+        TitleLabel.Size = UDim2.new(1, 0, 1, 0)
+        TitleLabel.BackgroundTransparency = 1
+        TitleLabel.Text = "xP BLADE BALL"
+        TitleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        TitleLabel.Font = Enum.Font.GothamBold
+        TitleLabel.TextSize = 16
+        TitleLabel.Parent = TitleBar
+        local function CreateToggle(text, yPos, settingKey)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(0.86, 0, 0, 40)
+            btn.Position = UDim2.new(0.07, 0, 0, yPos)
+            btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+            btn.BackgroundTransparency = 0
+            btn.Text = text .. ": OFF"
+            btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+            btn.Font = Enum.Font.GothamSemibold
+            btn.TextSize = 13
+            btn.Parent = MainFrame
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 8)
+            btnCorner.Parent = btn
+            btn.MouseButton1Click:Connect(function()
+                Settings[settingKey] = not Settings[settingKey]
+                local state = Settings[settingKey]
+                btn.Text = text .. (state and ": ON" or ": OFF")
+                btn.BackgroundColor3 = state and Color3.fromRGB(80, 80, 90) or Color3.fromRGB(35, 35, 40)
+                btn.TextColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 180)
+                if settingKey == "AutoWin" then
+                    AutoWinActive = state
+                elseif settingKey == "AutoDetectSpam" then
+                    AutoDetectSpamActive = state
+                elseif settingKey == "Otimizacao" then
+                    SetOptimizedMode(state)
+                    SendNotification("Otimização", state and "Modo Otimizado Ativado!" or "Otimização Desativada", 2)
+                end
+            end)
+        end
+        CreateToggle("AUTO PARRY", 60, "AutoParry")
+        CreateToggle("PANIC ABILITY", 110, "PanicAbility")
+        CreateToggle("AUTO SPAM", 160, "AutoSpam")
+        CreateToggle("AUTO WIN", 210, "AutoWin")
+        CreateToggle("AUTO DETECT SPAM", 260, "AutoDetectSpam")
+        CreateToggle("OTIMIZAÇÃO (FPS)", 310, "Otimizacao")
+        local ReactionFrame = Instance.new("Frame")
+        ReactionFrame.Size = UDim2.new(0.86, 0, 0, 45)
+        ReactionFrame.Position = UDim2.new(0.07, 0, 0, 365)
+        ReactionFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        ReactionFrame.BackgroundTransparency = 0
+        ReactionFrame.Parent = MainFrame
+        local ReactionCorner = Instance.new("UICorner")
+        ReactionCorner.CornerRadius = UDim.new(0, 8)
+        ReactionCorner.Parent = ReactionFrame
+        local ReactionLabel = Instance.new("TextLabel")
+        ReactionLabel.Size = UDim2.new(1, 0, 0, 20)
+        ReactionLabel.Position = UDim2.new(0, 0, 0, 5)
+        ReactionLabel.BackgroundTransparency = 1
+        ReactionLabel.Text = "TEMPO REAÇÃO: " .. Settings.ReactionTime
+        ReactionLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        ReactionLabel.Font = Enum.Font.Gotham
+        ReactionLabel.TextSize = 12
+        ReactionLabel.Parent = ReactionFrame
+        local FovFrame = Instance.new("Frame")
+        FovFrame.Size = UDim2.new(0.86, 0, 0, 45)
+        FovFrame.Position = UDim2.new(0.07, 0, 0, 415)
+        FovFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        FovFrame.BackgroundTransparency = 0
+        FovFrame.Parent = MainFrame
+        local FovCorner = Instance.new("UICorner")
+        FovCorner.CornerRadius = UDim.new(0, 8)
+        FovCorner.Parent = FovFrame
+        local FovLabel = Instance.new("TextLabel")
+        FovLabel.Size = UDim2.new(1, 0, 0, 20)
+        FovLabel.Position = UDim2.new(0, 0, 0, 5)
+        FovLabel.BackgroundTransparency = 1
+        FovLabel.Text = "FOV: " .. math.floor(workspace.CurrentCamera.FieldOfView)
+        FovLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        FovLabel.Font = Enum.Font.Gotham
+        FovLabel.TextSize = 12
+        FovLabel.Parent = FovFrame
+        local SliderBG = Instance.new("Frame")
+        SliderBG.Size = UDim2.new(1, 0, 0, 16)
+        SliderBG.Position = UDim2.new(0, 0, 0, 25)
+        SliderBG.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        SliderBG.Parent = FovFrame
+        local SliderCorner = Instance.new("UICorner")
+        SliderCorner.CornerRadius = UDim.new(0, 6)
+        SliderCorner.Parent = SliderBG
+        local Fill = Instance.new("Frame")
+        Fill.Size = UDim2.new((initialFOV - 50) / 70, 0, 1, 0)
+        Fill.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+        Fill.Parent = SliderBG
+        local FillCorner = Instance.new("UICorner")
+        FillCorner.CornerRadius = UDim.new(0, 6)
+        FillCorner.Parent = Fill
+        local Knob = Instance.new("Frame")
+        Knob.Size = UDim2.new(0, 12, 0, 20)
+        Knob.Position = UDim2.new(Fill.Size.X.Scale, -6, 0.5, -10)
+        Knob.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+        Knob.Parent = SliderBG
+        local KnobCorner = Instance.new("UICorner")
+        KnobCorner.CornerRadius = UDim.new(0, 6)
+        KnobCorner.Parent = Knob
+        local dragging = false
+        local function SetFOVFromScale(scale)
+            local minF, maxF = 50, 120
+            local value = minF + (maxF - minF) * math.clamp(scale, 0, 1)
+            workspace.CurrentCamera.FieldOfView = value
+            FovLabel.Text = "FOV: " .. math.floor(value)
+            Fill.Size = UDim2.new(math.clamp((value - minF) / (maxF - minF), 0, 1), 0, 1, 0)
+            Knob.Position = UDim2.new(Fill.Size.X.Scale, -6, 0.5, -10)
+        end
+        SliderBG.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                local rel = math.clamp((UserInputService:GetMouseLocation().X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+                SetFOVFromScale(rel)
+            end
+        end)
+        SliderBG.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local rel = math.clamp((UserInputService:GetMouseLocation().X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+                SetFOVFromScale(rel)
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+                MenuVisible = not MenuVisible
+                ScreenGui.Enabled = MenuVisible
+            end
+        end)
+        SendNotification("xP Blade Ball", "Script carregado com sucesso!", 4)
+    end
