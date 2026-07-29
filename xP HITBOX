@@ -1,0 +1,332 @@
+-- ============================================================
+-- xP HITBOX - AUMENTA A HITBOX DA CABEÇA DOS INIMIGOS
+-- ============================================================
+-- Execute em qualquer jogo (funciona com R6 e R15)
+
+repeat wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+-- Variáveis de estado
+local HitboxEnabled = false
+local HitboxSize = 3
+local TransparencyEnabled = false
+local originalHeadData = {}
+
+-- ============================================================
+-- CRIAÇÃO DA INTERFACE
+-- ============================================================
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "xPHitbox"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 260, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -90)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 1
+mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 100)
+mainFrame.ClipsDescendants = true
+mainFrame.Visible = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Barra de título
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+titleBar.BackgroundTransparency = 0
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -30, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "xP Hitbox"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Font = Enum.Font.GothamSemibold
+titleText.TextSize = 14
+titleText.Parent = titleBar
+
+-- Botão fechar
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 1, 0)
+closeBtn.Position = UDim2.new(1, -30, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeBtn.BackgroundTransparency = 0.2
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent = closeBtn
+
+-- Linha separadora
+local line = Instance.new("Frame")
+line.Size = UDim2.new(1, -20, 0, 1)
+line.Position = UDim2.new(0, 10, 0, 35)
+line.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+line.BackgroundTransparency = 0.5
+line.BorderSizePixel = 0
+line.Parent = mainFrame
+
+-- Botão toggle Hitbox
+local hitboxToggleBtn = Instance.new("TextButton")
+hitboxToggleBtn.Size = UDim2.new(0, 120, 0, 32)
+hitboxToggleBtn.Position = UDim2.new(0, 15, 0, 45)
+hitboxToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+hitboxToggleBtn.Text = "Hitbox: OFF"
+hitboxToggleBtn.TextColor3 = Color3.new(1,1,1)
+hitboxToggleBtn.Font = Enum.Font.GothamSemibold
+hitboxToggleBtn.TextSize = 13
+hitboxToggleBtn.BorderSizePixel = 0
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = hitboxToggleBtn
+hitboxToggleBtn.Parent = mainFrame
+
+-- Label do tamanho
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(0, 80, 0, 20)
+sizeLabel.Position = UDim2.new(0, 15, 0, 85)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Text = "Tamanho: 3.0"
+sizeLabel.TextColor3 = Color3.new(1,1,1)
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextSize = 12
+sizeLabel.Parent = mainFrame
+
+-- Slider de tamanho
+local sliderBg = Instance.new("Frame")
+sliderBg.Size = UDim2.new(0, 150, 0, 4)
+sliderBg.Position = UDim2.new(0, 15, 0, 108)
+sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+sliderBg.BorderSizePixel = 0
+sliderBg.Parent = mainFrame
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new((HitboxSize-1)/5, 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+sliderFill.BorderSizePixel = 0
+sliderFill.Parent = sliderBg
+
+local sliderBtn = Instance.new("TextButton")
+sliderBtn.Size = UDim2.new(0, 14, 0, 14)
+sliderBtn.Position = UDim2.new((HitboxSize-1)/5, -7, 0, -5)
+sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+sliderBtn.Text = ""
+sliderBtn.BorderSizePixel = 0
+
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.CornerRadius = UDim.new(1, 0)
+sliderCorner.Parent = sliderBtn
+sliderBtn.Parent = sliderBg
+
+-- Botão toggle Transparência
+local transToggleBtn = Instance.new("TextButton")
+transToggleBtn.Size = UDim2.new(0, 140, 0, 28)
+transToggleBtn.Position = UDim2.new(0, 15, 0, 125)
+transToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+transToggleBtn.Text = "Transparência: OFF"
+transToggleBtn.TextColor3 = Color3.new(1,1,1)
+transToggleBtn.Font = Enum.Font.GothamSemibold
+transToggleBtn.TextSize = 12
+transToggleBtn.BorderSizePixel = 0
+
+local transCorner = Instance.new("UICorner")
+transCorner.CornerRadius = UDim.new(0, 6)
+transCorner.Parent = transToggleBtn
+transToggleBtn.Parent = mainFrame
+
+-- ============================================================
+-- DRAG DA JANELA
+-- ============================================================
+
+local dragging = false
+local dragStartPos, dragStartMousePos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStartPos = mainFrame.Position
+        dragStartMousePos = input.Position
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStartMousePos
+        mainFrame.Position = UDim2.new(
+            dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X,
+            dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- ============================================================
+-- FUNÇÕES PRINCIPAIS
+-- ============================================================
+
+local function restoreAllHeads()
+    for head, data in pairs(originalHeadData) do
+        if head and head.Parent then
+            head.Size = data.Size
+            head.Transparency = data.Transparency
+        end
+    end
+    originalHeadData = {}
+end
+
+local function updateAllHeads()
+    if not HitboxEnabled then return end
+
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer == player then continue end
+        local char = otherPlayer.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not (hum and hum.Health > 0) then continue end
+        local head = char:FindFirstChild("Head")
+        if not head then continue end
+
+        -- Salva dados originais se não salvos ainda
+        if not originalHeadData[head] then
+            originalHeadData[head] = {
+                Size = head.Size,
+                Transparency = head.Transparency
+            }
+        end
+
+        -- Aplica novo tamanho
+        local newSize = Vector3.new(HitboxSize, HitboxSize, HitboxSize)
+        if head.Size ~= newSize then
+            head.Size = newSize
+        end
+
+        -- Aplica transparência se ativada
+        local newTrans = TransparencyEnabled and 0.5 or originalHeadData[head].Transparency
+        if head.Transparency ~= newTrans then
+            head.Transparency = newTrans
+        end
+    end
+end
+
+-- ============================================================
+-- EVENTOS DOS BOTÕES
+-- ============================================================
+
+-- Hitbox ON/OFF
+hitboxToggleBtn.MouseButton1Click:Connect(function()
+    HitboxEnabled = not HitboxEnabled
+    hitboxToggleBtn.Text = HitboxEnabled and "Hitbox: ON" or "Hitbox: OFF"
+
+    if not HitboxEnabled then
+        restoreAllHeads()
+    else
+        updateAllHeads()
+    end
+end)
+
+-- Slider de tamanho
+local sliderActive = false
+
+sliderBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderActive = true
+    end
+end)
+
+sliderBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderActive = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if sliderActive and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local relativeX = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+        HitboxSize = 1 + relativeX * 5
+        HitboxSize = math.round(HitboxSize * 10) / 10
+
+        sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+        sliderBtn.Position = UDim2.new(relativeX, -7, 0, -5)
+        sizeLabel.Text = string.format("Tamanho: %.1f", HitboxSize)
+
+        if HitboxEnabled then
+            updateAllHeads()
+        end
+    end
+end)
+
+-- Transparência
+transToggleBtn.MouseButton1Click:Connect(function()
+    TransparencyEnabled = not TransparencyEnabled
+    transToggleBtn.Text = TransparencyEnabled and "Transparência: ON" or "Transparência: OFF"
+    if HitboxEnabled then
+        updateAllHeads()
+    end
+end)
+
+-- Fechar janela
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
+
+-- Alternar com Alt (esquerdo ou direito)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+-- Loop de atualização (a cada 0.5s)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if HitboxEnabled then
+            updateAllHeads()
+        end
+    end
+end)
+
+-- Notificação
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "xP Hitbox",
+    Text = "Carregado! Pressione Alt para mostrar/ocultar.",
+    Duration = 4
+})
