@@ -1,62 +1,240 @@
--- Carrega a biblioteca DropLib (necessária para a interface)
-local cloneref = cloneref or clone_ref or clonereference or clone_reference or function(...) return (...) end
-local LibraryGui = loadstring(game:HttpGet("https://gitlab.com/0x45.xyz/droplib/-/raw/master/drop-minified.lua"))():Init({
-    ["HeaderWidth"] = 250,
-    ["AccentColor"] = Color3.new(0.6,0,0)
-}, cloneref(game:GetService("CoreGui")))
+-- Carrega a Obsidian UI Library
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Cria a categoria principal
-local Main = LibraryGui:CreateCategory("xP Luck Block")
+local Options = Library.Options
 
--- Variável para armazenar o bloco selecionado
+-- Proteção dos serviços
+local cloneref = cloneref or function(...) return ... end
+local Players = cloneref(game:GetService("Players"))
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+local LocalPlayer = Players.LocalPlayer
+
+-- Variável do bloco selecionado
 local SelectedBlock = "LuckyBlock"
 
--- Seletor de blocos
-Main:CreateSelector("Select Block", function(SelectedOption)
-    SelectedBlock = SelectedOption
-end, function()
-    return {"LuckyBlock", "SuperBlock", "DiamondBlock", "RainbowBlock", "GalaxyBlock", "VoidBlock"}
-end, "LuckyBlock")
+-- Cria a janela principal
+local Window = Library:CreateWindow({
+    Title = "xP Luck Block",
+    Footer = "Created by evertonXpp",
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
 
--- Referência ao ReplicatedStorage
-local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+-- Tabs
+local Tabs = {
+    Main = Window:AddTab("Main", "user"),
+    ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+}
 
--- Botão para spawnar o bloco
-Main:CreateButton("Spawn Block", function()
-    if SelectedBlock == "VoidBlock" then
-        -- Lógica especial para VoidBlock (spawna vários)
-        local RainblowBlock = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock")
-        local GalaxyBlock = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock")
-        if RainblowBlock and GalaxyBlock then
-            for _ = 1, 4 do
-                GalaxyBlock:FireServer()
-                RainblowBlock:FireServer()
+------------------------------------------------------------
+-- MAIN TAB
+------------------------------------------------------------
+
+local MainGroup = Tabs.Main:AddLeftGroupbox("Block Spawner", "boxes")
+
+-- Dropdown de seleção de blocos
+MainGroup:AddDropdown("SelectedBlockDropdown", {
+    Values = {
+        "LuckyBlock",
+        "SuperBlock",
+        "DiamondBlock",
+        "RainbowBlock",
+        "GalaxyBlock",
+        "VoidBlock",
+    },
+    Default = "LuckyBlock",
+    Multi = false,
+    Text = "Select Block",
+    Tooltip = "Escolha o bloco que deseja spawnar",
+    Callback = function(Value)
+        SelectedBlock = Value
+    end,
+})
+
+-- Botão de spawn
+MainGroup:AddButton({
+    Text = "Spawn Block",
+    Func = function()
+        if SelectedBlock == "VoidBlock" then
+            local RainbowEvent = ReplicatedStorage:FindFirstChild("SpawnRainbowBlock")
+            local GalaxyEvent = ReplicatedStorage:FindFirstChild("SpawnGalaxyBlock")
+            if RainbowEvent and GalaxyEvent then
+                for _ = 1, 4 do
+                    GalaxyEvent:FireServer()
+                    RainbowEvent:FireServer()
+                end
+                RainbowEvent:FireServer()
+                RainbowEvent:FireServer()
+
+                Library:Notify({
+                    Title = "VoidBlock",
+                    Description = "Blocos especiais spawnados!",
+                    Time = 3,
+                })
+            else
+                Library:Notify({
+                    Title = "Erro",
+                    Description = "RemoteEvents não encontrados!",
+                    Time = 4,
+                })
             end
-            RainblowBlock:FireServer()
-            RainblowBlock:FireServer()
+        else
+            local RemoteEvent = ReplicatedStorage:FindFirstChild("Spawn" .. SelectedBlock)
+            if RemoteEvent then
+                RemoteEvent:FireServer()
+                Library:Notify({
+                    Title = "Spawn",
+                    Description = SelectedBlock .. " spawnado!",
+                    Time = 2,
+                })
+            else
+                Library:Notify({
+                    Title = "Erro",
+                    Description = "RemoteEvent não encontrado: Spawn" .. SelectedBlock,
+                    Time = 4,
+                })
+            end
         end
-    else
-        local RemoteEvent = ReplicatedStorage:FindFirstChild("Spawn" .. SelectedBlock)
-        if RemoteEvent then
-            RemoteEvent:FireServer()
+    end,
+    DoubleClick = false,
+    Tooltip = "Spawna o bloco selecionado",
+})
+
+------------------------------------------------------------
+-- UTILIDADES (lado direito)
+------------------------------------------------------------
+
+local UtilityGroup = Tabs.Main:AddRightGroupbox("Utilities", "wrench")
+
+UtilityGroup:AddButton({
+    Text = "Clear Tools",
+    Func = function()
+        local Backpack = LocalPlayer.Backpack
+        if Backpack then Backpack:ClearAllChildren() end
+
+        local Character = LocalPlayer.Character
+        if Character then
+            for _, Child in ipairs(Character:GetChildren()) do
+                if Child:IsA("Tool") then Child:Destroy() end
+            end
         end
-    end
+
+        Library:Notify({
+            Title = "Ferramentas",
+            Description = "Todas as ferramentas foram removidas!",
+            Time = 3,
+        })
+    end,
+    DoubleClick = false,
+    Tooltip = "Limpa todas as ferramentas do inventário",
+})
+
+UtilityGroup:AddDivider()
+
+UtilityGroup:AddLabel("Bloco atual: LuckyBlock", true, "CurrentBlockLabel")
+
+-- Atualiza o label quando o dropdown mudar
+Options.SelectedBlockDropdown:OnChanged(function()
+    Options.CurrentBlockLabel:SetText("Bloco atual: " .. Options.SelectedBlockDropdown.Value)
 end)
 
--- Botão para limpar ferramentas do inventário
-local LocalPlayer = cloneref(game:GetService("Players")).LocalPlayer
-Main:CreateButton("Clear Tools", function()
-    local Backpack = LocalPlayer.Backpack
-    if Backpack then Backpack:ClearAllChildren() end
-    local Character = LocalPlayer.Character
-    if Character then
-        for _,Child in ipairs(Character:GetChildren()) do
-            if Child:IsA("Tool") then Child:Destroy() end
-        end
-    end
-end)
+------------------------------------------------------------
+-- UI SETTINGS
+------------------------------------------------------------
 
--- Botão para descarregar o script
-Main:CreateButton("Unload Script", function()
-    LibraryGui:CleanUp()
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
+
+MenuGroup:AddToggle("KeybindMenuOpen", {
+    Default = Library.KeybindFrame.Visible,
+    Text = "Open Keybind Menu",
+    Callback = function(value)
+        Library.KeybindFrame.Visible = value
+    end,
+})
+
+MenuGroup:AddToggle("ShowCustomCursor", {
+    Text = "Custom Cursor",
+    Default = Library.ShowCustomCursor,
+    Callback = function(Value)
+        Library.ShowCustomCursor = Value
+    end,
+})
+
+MenuGroup:AddDropdown("NotificationSide", {
+    Values = { "Left", "Right" },
+    Default = "Right",
+    Text = "Notification Side",
+    Callback = function(Value)
+        Library:SetNotifySide(Value)
+    end,
+})
+
+MenuGroup:AddDropdown("DPIDropdown", {
+    Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+    Default = "100%",
+    Text = "DPI Scale",
+    Callback = function(Value)
+        Value = Value:gsub("%%", "")
+        local DPI = tonumber(Value)
+        Library:SetDPIScale(DPI)
+    end,
+})
+
+MenuGroup:AddSlider("UICornerSlider", {
+    Text = "Corner Radius",
+    Default = Library.CornerRadius,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
+    Callback = function(value)
+        Window:SetCornerRadius(value)
+    end,
+})
+
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("Menu bind")
+    :AddKeyPicker("MenuKeybind", {
+        Default = "RightShift",
+        NoUI = true,
+        Text = "Menu keybind",
+    })
+
+MenuGroup:AddButton({
+    Text = "Unload",
+    Func = function()
+        Library:Unload()
+    end,
+})
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+------------------------------------------------------------
+-- ADDONS (Temas e Configs)
+------------------------------------------------------------
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("xP Luck Block")
+SaveManager:SetFolder("xP Luck Block/game")
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+SaveManager:LoadAutoloadConfig()
+
+------------------------------------------------------------
+-- Notificação de boas-vindas
+------------------------------------------------------------
+
+Library:Notify({
+    Title = "xP Luck Block",
+    Description = "Script carregado com sucesso! 🎲",
+    Time = 4,
+})
+
+Library:OnUnload(function()
+    print("[xP Luck Block] Script descarregado!")
 end)
