@@ -1,26 +1,26 @@
 -- ============================================================
--- PULL PARTS (BLACK HOLE PLAYER)
+-- xP BLACK HOLE
 -- ============================================================
 -- Puxa todas as partes do workspace em direção ao jogador selecionado
 -- Execute em qualquer jogo (funciona na maioria dos jogos)
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+local Players = gameGetService(Players)
+local RunService = gameGetService(RunService)
+local UserInputService = gameGetService(UserInputService)
+local Workspace = gameGetService(Workspace)
 local LocalPlayer = Players.LocalPlayer
 
 -- ============================================================
 -- CONFIGURAÇÃO DA INTERFACE
 -- ============================================================
 
-local Gui = Instance.new("ScreenGui")
-Gui.Name = "PullPartsGUI"
+local Gui = Instance.new(ScreenGui)
+Gui.Name = PullPartsGUI
 Gui.Parent = gethui() or game.CoreGui
 Gui.ResetOnSpawn = false
 
-local Main = Instance.new("Frame")
-Main.Name = "MainFrame"
+local Main = Instance.new(Frame)
+Main.Name = MainFrame
 Main.Parent = Gui
 Main.BackgroundColor3 = Color3.fromRGB(75,75,75)
 Main.BorderSizePixel = 0
@@ -29,16 +29,16 @@ Main.Size = UDim2.new(0.240, 0, 0.420, 0)
 Main.Active = true
 Main.Draggable = true
 
-local Title = Instance.new("TextLabel")
+local Title = Instance.new(TextLabel)
 Title.Parent = Main
 Title.BackgroundColor3 = Color3.fromRGB(95,95,95)
 Title.Size = UDim2.new(1,0,0.10,0)
-Title.Text = "Black Hole | Players"
+Title.Text = Black Hole  Players
 Title.TextColor3 = Color3.new(1,1,1)
 Title.TextScaled = true
 
 -- Lista de jogadores (ScrollingFrame)
-local PlayerList = Instance.new("ScrollingFrame")
+local PlayerList = Instance.new(ScrollingFrame)
 PlayerList.Parent = Main
 PlayerList.BackgroundColor3 = Color3.fromRGB(55,55,55)
 PlayerList.Position = UDim2.new(0.05, 0, 0.12, 0)
@@ -46,12 +46,12 @@ PlayerList.Size = UDim2.new(0.9, 0, 0.58, 0)
 PlayerList.BorderSizePixel = 0
 PlayerList.ScrollBarThickness = 8
 
-local UIListLayout = Instance.new("UIListLayout")
+local UIListLayout = Instance.new(UIListLayout)
 UIListLayout.Parent = PlayerList
 UIListLayout.SortOrder = Enum.SortOrder.Name
 UIListLayout.Padding = UDim.new(0, 2)
 
-local UIPadding = Instance.new("UIPadding")
+local UIPadding = Instance.new(UIPadding)
 UIPadding.Parent = PlayerList
 UIPadding.PaddingTop = UDim.new(0, 5)
 
@@ -59,25 +59,25 @@ local function updateCanvasSize()
     local contentSize = UIListLayout.AbsoluteContentSize
     PlayerList.CanvasSize = UDim2.new(0, contentSize.X, 0, contentSize.Y)
 end
-UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
+UIListLayoutGetPropertyChangedSignal(AbsoluteContentSize)Connect(updateCanvasSize)
 
 -- Label do jogador selecionado
-local SelectedLabel = Instance.new("TextLabel")
+local SelectedLabel = Instance.new(TextLabel)
 SelectedLabel.Parent = Main
 SelectedLabel.BackgroundColor3 = Color3.fromRGB(45,45,45)
 SelectedLabel.Position = UDim2.new(0.05, 0, 0.72, 0)
 SelectedLabel.Size = UDim2.new(0.9, 0, 0.10, 0)
-SelectedLabel.Text = "Selecionado: Nenhum"
+SelectedLabel.Text = Selecionado Nenhum
 SelectedLabel.TextColor3 = Color3.new(1,1,1)
 SelectedLabel.TextScaled = true
 
 -- Botão de ativação
-local Button = Instance.new("TextButton")
+local Button = Instance.new(TextButton)
 Button.Parent = Main
 Button.BackgroundColor3 = Color3.fromRGB(95,95,95)
 Button.Position = UDim2.new(0.183, 0, 0.84, 0)
 Button.Size = UDim2.new(0.629, 0, 0.11, 0)
-Button.Text = "Bring Parts | Off"
+Button.Text = Bring Parts  Off
 Button.TextColor3 = Color3.new(1,1,1)
 Button.TextScaled = true
 
@@ -91,9 +91,9 @@ local descendantConnection
 local currentCharacterConnection
 
 -- Cria o folder e a parte invisível
-local Folder = Instance.new("Folder", Workspace)
-local Part = Instance.new("Part", Folder)
-local Attachment1 = Instance.new("Attachment", Part)
+local Folder = Instance.new(Folder, Workspace)
+local Part = Instance.new(Part, Folder)
+local Attachment1 = Instance.new(Attachment, Part)
 Part.Anchored = true
 Part.CanCollide = false
 Part.Transparency = 1
@@ -109,7 +109,7 @@ if not getgenv().Network then
     }
 
     Network.RetainPart = function(part)
-        if part:IsA("BasePart") and part:IsDescendantOf(Workspace) then
+        if partIsA(BasePart) and partIsDescendantOf(Workspace) then
             table.insert(Network.BaseParts, part)
             part.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,0,0)
             part.CanCollide = false
@@ -118,10 +118,10 @@ if not getgenv().Network then
 
     local function EnablePartControl()
         LocalPlayer.ReplicationFocus = Workspace
-        RunService.Heartbeat:Connect(function()
-            sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+        RunService.HeartbeatConnect(function()
+            sethiddenproperty(LocalPlayer, SimulationRadius, math.huge)
             for _, p in pairs(Network.BaseParts) do
-                if p:IsDescendantOf(Workspace) then
+                if pIsDescendantOf(Workspace) then
                     p.Velocity = Network.Velocity
                 end
             end
@@ -135,30 +135,30 @@ end
 -- ============================================================
 
 local function ForcePart(v)
-    if v:IsA("BasePart") and not v.Anchored and not v.Parent:FindFirstChildOfClass("Humanoid") and not v.Parent:FindFirstChild("Head") and v.Name ~= "Handle" then
+    if vIsA(BasePart) and not v.Anchored and not v.ParentFindFirstChildOfClass(Humanoid) and not v.ParentFindFirstChild(Head) and v.Name ~= Handle then
         -- Remove BodyMovers antigos
-        for _, x in ipairs(v:GetChildren()) do
-            if x:IsA("BodyMover") or x:IsA("RocketPropulsion") then
-                x:Destroy()
+        for _, x in ipairs(vGetChildren()) do
+            if xIsA(BodyMover) or xIsA(RocketPropulsion) then
+                xDestroy()
             end
         end
-        if v:FindFirstChild("Attachment") then
-            v:FindFirstChild("Attachment"):Destroy()
+        if vFindFirstChild(Attachment) then
+            vFindFirstChild(Attachment)Destroy()
         end
-        if v:FindFirstChild("AlignPosition") then
-            v:FindFirstChild("AlignPosition"):Destroy()
+        if vFindFirstChild(AlignPosition) then
+            vFindFirstChild(AlignPosition)Destroy()
         end
-        if v:FindFirstChild("Torque") then
-            v:FindFirstChild("Torque"):Destroy()
+        if vFindFirstChild(Torque) then
+            vFindFirstChild(Torque)Destroy()
         end
 
         v.CanCollide = false
 
-        local Torque = Instance.new("Torque", v)
+        local Torque = Instance.new(Torque, v)
         Torque.Torque = Vector3.new(100000,100000,100000)
 
-        local AlignPosition = Instance.new("AlignPosition", v)
-        local Attachment2 = Instance.new("Attachment", v)
+        local AlignPosition = Instance.new(AlignPosition, v)
+        local Attachment2 = Instance.new(Attachment, v)
 
         Torque.Attachment0 = Attachment2
         AlignPosition.MaxForce = math.huge
@@ -170,22 +170,22 @@ local function ForcePart(v)
 end
 
 -- ============================================================
--- FUNÇÕES DE ATIVAÇÃO/DESATIVAÇÃO
+-- FUNÇÕES DE ATIVAÇÃODESATIVAÇÃO
 -- ============================================================
 
 local function toggleBlackHole()
     blackHoleActive = not blackHoleActive
 
     if blackHoleActive then
-        Button.Text = "Bring Parts | On"
+        Button.Text = Bring Parts  On
 
         -- Aplica em todas as partes existentes
-        for _, v in ipairs(Workspace:GetDescendants()) do
+        for _, v in ipairs(WorkspaceGetDescendants()) do
             ForcePart(v)
         end
 
         -- Escuta novas partes adicionadas
-        descendantConnection = Workspace.DescendantAdded:Connect(function(v)
+        descendantConnection = Workspace.DescendantAddedConnect(function(v)
             if blackHoleActive then
                 ForcePart(v)
             end
@@ -193,16 +193,16 @@ local function toggleBlackHole()
 
         -- Loop de atualização da posição do Attachment
         spawn(function()
-            while blackHoleActive and RunService.RenderStepped:Wait() do
+            while blackHoleActive and RunService.RenderSteppedWait() do
                 if humanoidRootPart then
                     Attachment1.WorldCFrame = humanoidRootPart.CFrame
                 end
             end
         end)
     else
-        Button.Text = "Bring Parts | Off"
+        Button.Text = Bring Parts  Off
         if descendantConnection then
-            descendantConnection:Disconnect()
+            descendantConnectionDisconnect()
             descendantConnection = nil
         end
     end
@@ -217,7 +217,7 @@ local function setTargetPlayer(player)
         playerSelected = nil
         character = nil
         humanoidRootPart = nil
-        SelectedLabel.Text = "Selecionado: Nenhum"
+        SelectedLabel.Text = Selecionado Nenhum
         if blackHoleActive then
             toggleBlackHole()
         end
@@ -225,19 +225,19 @@ local function setTargetPlayer(player)
     end
 
     playerSelected = player
-    SelectedLabel.Text = "Selecionado: " .. player.Name
+    SelectedLabel.Text = Selecionado  .. player.Name
 
     if currentCharacterConnection then
-        currentCharacterConnection:Disconnect()
+        currentCharacterConnectionDisconnect()
     end
 
     local function updateCharacter()
         character = playerSelected.Character
-        humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        humanoidRootPart = character and characterFindFirstChild(HumanoidRootPart)
     end
 
     updateCharacter()
-    currentCharacterConnection = playerSelected.CharacterAdded:Connect(updateCharacter)
+    currentCharacterConnection = playerSelected.CharacterAddedConnect(updateCharacter)
 end
 
 -- ============================================================
@@ -246,19 +246,19 @@ end
 
 local function refreshPlayerList()
     -- Limpa lista
-    for _, child in ipairs(PlayerList:GetChildren()) do
-        if child:IsA("ImageButton") then
-            child:Destroy()
+    for _, child in ipairs(PlayerListGetChildren()) do
+        if childIsA(ImageButton) then
+            childDestroy()
         end
     end
 
-    local players = Players:GetPlayers()
+    local players = PlayersGetPlayers()
     if #players == 0 then
-        local empty = Instance.new("TextLabel")
+        local empty = Instance.new(TextLabel)
         empty.Parent = PlayerList
         empty.Size = UDim2.new(1, 0, 0, 40)
         empty.BackgroundTransparency = 1
-        empty.Text = "Nenhum player no servidor"
+        empty.Text = Nenhum player no servidor
         empty.TextColor3 = Color3.new(0.7,0.7,0.7)
         empty.TextScaled = true
         updateCanvasSize()
@@ -266,7 +266,7 @@ local function refreshPlayerList()
     end
 
     for _, plr in ipairs(players) do
-        local btn = Instance.new("ImageButton")
+        local btn = Instance.new(ImageButton)
         btn.Parent = PlayerList
         btn.Size = UDim2.new(1, 0, 0, 48)
         btn.BackgroundColor3 = Color3.fromRGB(65,65,65)
@@ -274,15 +274,15 @@ local function refreshPlayerList()
         btn.AutoButtonColor = true
 
         -- Avatar thumbnail
-        local avatar = Instance.new("ImageLabel")
+        local avatar = Instance.new(ImageLabel)
         avatar.Parent = btn
         avatar.Size = UDim2.new(0, 38, 0, 38)
         avatar.Position = UDim2.new(0, 5, 0.5, -19)
         avatar.BackgroundTransparency = 1
-        avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. plr.UserId .. "&width=48&height=48"
+        avatar.Image = httpswww.roblox.comheadshot-thumbnailimageuserId= .. plr.UserId .. &width=48&height=48
 
         -- Nome
-        local nameLabel = Instance.new("TextLabel")
+        local nameLabel = Instance.new(TextLabel)
         nameLabel.Parent = btn
         nameLabel.Size = UDim2.new(1, -50, 1, 0)
         nameLabel.Position = UDim2.new(0, 48, 0, 0)
@@ -293,7 +293,7 @@ local function refreshPlayerList()
         nameLabel.TextScaled = true
         nameLabel.Font = Enum.Font.GothamBold
 
-        btn.MouseButton1Click:Connect(function()
+        btn.MouseButton1ClickConnect(function()
             setTargetPlayer(plr)
         end)
     end
@@ -305,19 +305,19 @@ end
 -- EVENTOS DA LISTA
 -- ============================================================
 
-Players.PlayerAdded:Connect(refreshPlayerList)
-Players.PlayerRemoving:Connect(refreshPlayerList)
+Players.PlayerAddedConnect(refreshPlayerList)
+Players.PlayerRemovingConnect(refreshPlayerList)
 refreshPlayerList()
 
 -- ============================================================
 -- EVENTO DO BOTÃO DE ATIVAÇÃO
 -- ============================================================
 
-Button.MouseButton1Click:Connect(function()
+Button.MouseButton1ClickConnect(function()
     if not playerSelected then
-        SelectedLabel.Text = "Selecione um player!"
+        SelectedLabel.Text = Selecione um player!
         task.wait(1)
-        SelectedLabel.Text = playerSelected and ("Selecionado: " .. playerSelected.Name) or "Selecionado: Nenhum"
+        SelectedLabel.Text = playerSelected and (Selecionado  .. playerSelected.Name) or Selecionado Nenhum
         return
     end
     toggleBlackHole()
@@ -327,7 +327,7 @@ end)
 -- ALTERNAR INTERFACE COM RIGHT CONTROL
 -- ============================================================
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+UserInputService.InputBeganConnect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.RightControl and not gameProcessed then
         Main.Visible = not Main.Visible
     end
@@ -337,8 +337,8 @@ end)
 -- NOTIFICAÇÃO DE CARREGAMENTO
 -- ============================================================
 
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Pull Parts",
-    Text = "Carregado! Selecione um player e ative.",
+gameGetService(StarterGui)SetCore(SendNotification, {
+    Title = Pull Parts,
+    Text = Carregado! Selecione um player e ative.,
     Duration = 4
 })
