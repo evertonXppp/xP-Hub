@@ -1,7 +1,6 @@
 -- ============================================================
--- xP BLADE BALL - SCRIPT COMPLETO (Bypass Avançado + xP UI)
+-- xP Hub - Blade Ball (xP UI nova + Toggle corrigido + Keybind OK)
 -- ============================================================
--- Execute no jogo "Blade Ball" (Roblox)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,191 +15,42 @@ local TweenService = game:GetService("TweenService")
 local Player = Players.LocalPlayer
 
 -- ============================================================
--- BYPASS AVANÇADO — INSTALAR ANTES DE QUALQUER COISA
+-- BYPASS SEGURO
 -- ============================================================
 do
-    local _getrawmetatable = rawget and getrawmetatable or nil
-    local _getmetatable = getmetatable
-    local _setreadonly = setreadonly
-    local _getnamecallmethod = getnamecallmethod
-    local _newcclosure = newcclosure or function(f) return f end
-    local _hookfunction = hookfunction
     local _pcall = pcall
-    local _type = type
-    local _string = string
+    local _setreadonly = setreadonly
+    local _newcclosure = newcclosure or function(f) return f end
 
-    local nc = _newcclosure
-    local function safe(fn, ...)
-        local ok, r = _pcall(fn, ...)
-        return ok and r or nil
-    end
-
-    -- ---------------------------------------------
-    -- 1) HOOK NA METATABLE (__namecall / __index / __newindex)
-    -- ---------------------------------------------
-    local mt = safe(function()
-        return _getrawmetatable and _getrawmetatable(game) or _getmetatable(game)
-    end)
-
-    if mt then
+    _pcall(function()
+        local mt = (getrawmetatable and getrawmetatable(game)) or getmetatable(game)
+        if not mt then return end
         local oldNamecall = mt.__namecall
-        local oldIndex = mt.__index
-        local oldNewIndex = mt.__newindex
-
-        if _setreadonly then safe(_setreadonly, mt, false) end
-
-        -- Bloqueios __namecall
-        if oldNamecall then
-            mt.__namecall = nc(function(self, ...)
-                local method = safe(_getnamecallmethod)
-                if method == "Kick" or method == "Ban" then return nil end
-                if method == "Destroy" and (self == Player or self == Player.Character) then
-                    return nil
-                end
-                return oldNamecall(self, ...)
-            end)
-        end
-
-        -- Bloqueios __index
-        if oldIndex then
-            mt.__index = nc(function(self, key)
-                if _type(key) == "string" then
-                    local lk = _string.lower(key)
-                    if lk:find("anticheat") or lk:find("anti_cheat")
-                        or lk:find("detected") or lk:find("suspicious")
-                        or lk:find("isverified") or lk:find("isflagged")
-                        or lk:find("honeypot") or lk:find("banreason")
-                        or lk:find("httpget") or lk:find("httppost")
-                        or lk:find("request") then
-                        return nil
-                    end
-                    if key == "Kick" then return function() end end
-                    if key == "Ban" then return function() end end
-                end
-                return oldIndex(self, key)
-            end)
-        end
-
-        -- Bloqueios __newindex (impede atribuição de flags)
-        if oldNewIndex then
-            mt.__newindex = nc(function(self, key, value)
-                if _type(key) == "string" then
-                    local lk = _string.lower(key)
-                    if lk:find("detected") or lk:find("flagged")
-                        or lk:find("suspicious") or lk:find("anticheat") then
-                        return nil
-                    end
-                end
-                return oldNewIndex(self, key, value)
-            end)
-        end
-
-        if _setreadonly then safe(_setreadonly, mt, true) end
-    end
-
-    -- ---------------------------------------------
-    -- 2) FILTRO DE pcall (silencia erros de anticheat)
-    -- ---------------------------------------------
-    if _hookfunction then
-        safe(function()
-            _hookfunction(_pcall, nc(function(fn, ...)
-                local ok, err = _pcall(fn, ...)
-                if not ok and _type(err) == "string" then
-                    local l = _string.lower(err)
-                    if l:find("anticheat") or l:find("anti-cheat")
-                        or l:find("kicked") or l:find("banned")
-                        or l:find("detected") or l:find("you have been")
-                        or l:find("exploiter") or l:find("violation") then
-                        return true, nil
-                    end
-                end
-                return ok, err
-            end))
-        end)
-    end
-
-    -- ---------------------------------------------
-    -- 3) HOOK Player:Kick
-    -- ---------------------------------------------
-    safe(function()
-        if _hookfunction then
-            local ok = _pcall(function()
-                local oldKick = Player.Kick
-                _hookfunction(oldKick, nc(function(self, ...)
-                    if self == Player then return nil end
-                    return oldKick(self, ...)
-                end))
-            end)
-            if not ok then
-                Player.Kick = nc(function() end)
+        if not oldNamecall then return end
+        if _setreadonly then _setreadonly(mt, false) end
+        mt.__namecall = _newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if method == "Kick" or method == "Ban" then
+                if self == Player or self == game then return nil end
             end
-        else
-            Player.Kick = nc(function() end)
-        end
+            return oldNamecall(self, ...)
+        end)
+        if _setreadonly then _setreadonly(mt, true) end
     end)
 
-    -- ---------------------------------------------
-    -- 4) GUARDA DE REMOTES HONEYPOT
-    -- ---------------------------------------------
-    local function GuardRemotes()
-        safe(function()
-            local rs = game:GetService("ReplicatedStorage")
-            for _, obj in ipairs(rs:GetDescendants()) do
-                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    local n = _string.lower(obj.Name)
-                    if n:find("log") or n:find("report")
-                        or n:find("detect") or n:find("flag")
-                        or n:find("honeypot") or n:find("anticheat")
-                        or n:find("anti_cheat") then
-                        safe(function() obj:Destroy() end)
-                    end
-                end
-            end
-        end)
-    end
-
-    -- ---------------------------------------------
-    -- 5) BLOQUEIO DE TELEMETRIA HTTP (quando disponível)
-    -- ---------------------------------------------
-    safe(function()
-        if _hookfunction and request then
-            local oldReq = request
-            _hookfunction(oldReq, nc(function(options)
-                if _type(options) == "table" and _type(options.Url) == "string" then
-                    local u = _string.lower(options.Url)
-                    if u:find("anticheat") or u:find("bladeball")
-                        or u:find("detect") or u:find("report")
-                        or u:find("log") then
-                        return { StatusCode = 200, Body = "{}", Success = true }
-                    end
-                end
-                return oldReq(options)
+    _pcall(function()
+        if hookfunction then
+            local oldKick = Player.Kick
+            hookfunction(oldKick, _newcclosure(function(self, ...)
+                if self == Player then return nil end
+                return oldKick(self, ...)
             end))
         end
     end)
-
-    -- ---------------------------------------------
-    -- 6) REAPLICAÇÃO EM RESPAWN
-    -- ---------------------------------------------
-    safe(function()
-        Player.CharacterAdded:Connect(function()
-            task.wait(0.15)
-            GuardRemotes()
-            -- Reaplica hook na metatable caso tenha sido resetado
-            local m2 = safe(function()
-                return _getrawmetatable and _getrawmetatable(game) or _getmetatable(game)
-            end)
-            if m2 and not m2.__xp_bypass then
-                m2.__xp_bypass = true
-            end
-        end)
-    end)
-
-    GuardRemotes()
 end
 
 -- ============================================================
--- ESTADO / SETTINGS
+-- ESTADO
 -- ============================================================
 local Parried = false
 local LastParry = 0
@@ -209,7 +59,6 @@ local SpamActive = false
 local AutoWinActive = false
 local AutoDetectSpamActive = false
 local ParryCounter = 0
-local MenuVisible = true
 local OptimizedMode = false
 local savedLighting = {}
 local savedParticleStates = {}
@@ -225,18 +74,16 @@ local Settings = {
     PanicDistance = 25,
     SpamSpeed = 5,
     Otimizacao = false,
-    Humanize = true,   -- NOVO: randomização de timing
+    Humanize = true,
 }
 
 -- ============================================================
--- OTIMIZAÇÃO (partículas / fog / gráficos)
+-- OTIMIZAÇÃO
 -- ============================================================
 local function SetParticlesEnabled(enabled)
     if enabled then
         for inst, state in pairs(savedParticleStates) do
-            if inst and inst.Parent then
-                pcall(function() inst.Enabled = state end)
-            end
+            if inst and inst.Parent then pcall(function() inst.Enabled = state end) end
         end
         savedParticleStates = {}
     else
@@ -298,27 +145,18 @@ end
 
 local function SetOptimizedMode(on)
     OptimizedMode = on
-    if on then
-        SetFogDisabled(true)
-        SetParticlesEnabled(false)
-        SetLowGraphics(true)
-    else
-        SetFogDisabled(false)
-        SetParticlesEnabled(true)
-        SetLowGraphics(false)
-    end
+    if on then SetFogDisabled(true); SetParticlesEnabled(false); SetLowGraphics(true)
+    else SetFogDisabled(false); SetParticlesEnabled(true); SetLowGraphics(false) end
 end
 
 -- ============================================================
--- DETECÇÃO DA BOLA
+-- DETECÇÃO
 -- ============================================================
 local function GetRealBall()
     local balls = Workspace:FindFirstChild("Balls")
     if not balls then return nil end
     for _, ball in ipairs(balls:GetChildren()) do
-        if ball:IsA("BasePart") and ball:GetAttribute("realBall") == true then
-            return ball
-        end
+        if ball:IsA("BasePart") and ball:GetAttribute("realBall") == true then return ball end
     end
     return nil
 end
@@ -338,31 +176,21 @@ end
 local function GetBallSpeed(ball)
     if not ball then return 0 end
     if ball:FindFirstChild("zoomies") then
-        return ball.zoomies.VectorVectorVelocity and 0 or ball.zoomies.VectorVelocity.Magnitude
+        return ball.zoomies.VectorVelocity.Magnitude
     end
     return ball.Velocity.Magnitude
 end
 
 -- ============================================================
--- AÇÕES (com ANTI-DETECÇÃO)
+-- AÇÕES
 -- ============================================================
--- Random human delay em ms
-local function humanDelay(minMs, maxMs)
-    if Settings.Humanize then
-        task.wait(math.random(minMs, maxMs) / 1000)
-    end
-end
-
 local function SendParry()
     local now = tick()
-    -- Debounce mais apertado mas com jitter
     local minGap = Settings.Humanize and (0.07 + math.random() * 0.03) or 0.1
     if now - LastParry < minGap then return end
     LastParry = now
 
-    -- 60% remote, 40% virtual input (evita padrão fixo)
     local useRemote = math.random() > 0.4
-
     if useRemote then
         local sent = pcall(function()
             local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
@@ -370,17 +198,13 @@ local function SendParry()
                 local ParryRemote = Remotes:FindFirstChild("ParryButtonPress")
                     or Remotes:FindFirstChild("Parry")
                     or Remotes:FindFirstChild("ParryEvent")
-                if ParryRemote then
-                    ParryRemote:FireServer()
-                    return true
-                end
+                if ParryRemote then ParryRemote:FireServer(); return true end
             end
             return false
         end)
         if sent then return end
     end
 
-    -- Fallback: input virtual humanizado
     pcall(function()
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
         task.wait(math.random(8, 20) / 1000)
@@ -393,7 +217,6 @@ local function SendAbility()
     local minGap = Settings.Humanize and (1.15 + math.random() * 0.2) or 1.2
     if now - LastAbility < minGap then return end
     LastAbility = now
-
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
         task.wait(math.random(10, 25) / 1000)
@@ -401,27 +224,17 @@ local function SendAbility()
     end)
 end
 
--- ============================================================
--- AUTO WIN (SEM LOCK-ON — não vira mais o boneco)
--- ============================================================
 local function AutoWinLogic()
     if not AutoWinActive then return end
     local balls = Workspace:FindFirstChild("Balls")
     if not balls then return end
     for _, ball in ipairs(balls:GetChildren()) do
         if ball and ball:IsA("BasePart") and ball:GetAttribute("realBall") then
-            -- ❌ REMOVIDO: hrp.CFrame = CFrame.new(hrp.Position, ball.Position)
-            -- Agora apenas parry quando a bola estiver mirando em você
-            if IsTargeted(ball) then
-                SendParry()
-            end
+            if IsTargeted(ball) then SendParry() end
         end
     end
 end
 
--- ============================================================
--- DETECTAR JOGADOR MAIS PRÓXIMO
--- ============================================================
 local function GetNearestPlayer()
     local nearest = nil
     local minDist = math.huge
@@ -432,48 +245,27 @@ local function GetNearestPlayer()
             local char = plr.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
-                if dist < minDist then
-                    minDist = dist
-                    nearest = plr
-                end
+                if dist < minDist then minDist = dist; nearest = plr end
             end
         end
     end
     return nearest
 end
 
--- ============================================================
--- AUTO DETECT SPAM
--- ============================================================
 local function AutoDetectSpamLogic(ball)
-    if not AutoDetectSpamActive or not ball then
-        SpamActive = false
-        return
-    end
+    if not AutoDetectSpamActive or not ball then SpamActive = false; return end
     local nearest = GetNearestPlayer()
-    if not nearest then
-        SpamActive = false
-        return
-    end
+    if not nearest then SpamActive = false; return end
     local nearestChar = nearest.Character
-    if not nearestChar or not nearestChar:FindFirstChild("HumanoidRootPart") then
-        SpamActive = false
-        return
-    end
+    if not nearestChar or not nearestChar:FindFirstChild("HumanoidRootPart") then SpamActive = false; return end
     local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        SpamActive = false
-        return
-    end
+    if not hrp then SpamActive = false; return end
     local playerDist = (hrp.Position - nearestChar.HumanoidRootPart.Position).Magnitude
     local ballDist = GetDistanceToBall(ball)
     local detectDistance = 25 + math.clamp(ParryCounter / 3, 0, 25)
     SpamActive = (ParryCounter > 2 and playerDist < detectDistance and ballDist < 55)
 end
 
--- ============================================================
--- AUTO SPAM
--- ============================================================
 local function AutoSpamLogic()
     if not Settings.AutoSpam or not SpamActive then return end
     for i = 1, math.floor(Settings.SpamSpeed) do
@@ -482,14 +274,8 @@ local function AutoSpamLogic()
     end
 end
 
--- ============================================================
--- LOOP PRINCIPAL
--- ============================================================
 RunService.PreSimulation:Connect(function()
-    if AutoWinActive then
-        AutoWinLogic()
-        return
-    end
+    if AutoWinActive then AutoWinLogic(); return end
     if Settings.AutoParry or Settings.PanicAbility then
         local ball = GetRealBall()
         if not ball then return end
@@ -522,7 +308,6 @@ RunService.PreSimulation:Connect(function()
             if not Parried then
                 SendParry()
                 Parried = true
-                -- Reset com jitter
                 task.delay(Settings.Humanize and (0.4 + math.random() * 0.2) or 0.5, function() Parried = false end)
             end
         end
@@ -533,7 +318,6 @@ RunService.PreSimulation:Connect(function()
     end
 end)
 
--- Reset do Parried ao spawnar nova bola
 pcall(function()
     Workspace:WaitForChild("Balls").ChildAdded:Connect(function()
         task.wait(0.15)
@@ -572,9 +356,7 @@ local ConsumedInputs = {}
 local function Create(instance, properties, children)
     local obj = Instance.new(instance)
     for k, v in pairs(properties) do obj[k] = v end
-    if children then
-        for _, child in ipairs(children) do child.Parent = obj end
-    end
+    if children then for _, child in ipairs(children) do child.Parent = obj end end
     return obj
 end
 
@@ -589,7 +371,6 @@ local CreatedElements = {
     Toggles = {}, Sliders = {}, Checkboxes = {}, TabButtons = {},
     Keybinds = {}, Notifications = {}, NotifAccentBars = {},
 }
-
 local ToggleKeybinds = {}
 local NotifContainer
 
@@ -738,46 +519,73 @@ function Library:CreateTab(name, icon)
     local function AddToSearch(frame, searchText) table.insert(Tab.Elements, {Frame = frame, SearchText = searchText or ""}) end
 
     local function CreateToggle(parent, text, defaultState, callback, defaultKey, noNotify)
-        local ToggleFrame = Create("Frame", {Size = UDim2.new(1,0,0,38), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(1,-180,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = ToggleFrame})
-        local ToggleBtn = Create("TextButton", {Size = UDim2.new(0,36,0,18), Position = UDim2.new(1,-50,0.5,-9), BackgroundColor3 = defaultState and Theme.ToggleOn or Theme.ToggleOff, Text = "", AutoButtonColor = false, Parent = ToggleFrame}, {Create("UICorner", {CornerRadius = UDim.new(1,0)})})
-        local Circle = Create("Frame", {Size = UDim2.new(0,14,0,14), Position = defaultState and UDim2.new(1,-16,0,2) or UDim2.new(0,2,0,2), BackgroundColor3 = Theme.Text, Parent = ToggleBtn}, {Create("UICorner", {CornerRadius = UDim.new(1,0)})})
+        local ToggleFrame = Create("Frame", {Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+        Create("TextLabel", {Size = UDim2.new(1, -24, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 1, Parent = ToggleFrame})
+        local ToggleBtn = Create("TextButton", {Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -12, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = defaultState and Theme.ToggleOn or Theme.ToggleOff, Text = "", AutoButtonColor = false, ZIndex = 2, Parent = ToggleFrame}, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+        local Circle = Create("Frame", {Size = UDim2.new(0, 14, 0, 14), Position = defaultState and UDim2.new(1, -16, 0, 2) or UDim2.new(0, 2, 0, 2), BackgroundColor3 = Theme.Text, Parent = ToggleBtn}, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
         local state = defaultState
         table.insert(CreatedElements.Toggles, {Btn = ToggleBtn, State = state})
         local myIndex = #CreatedElements.Toggles
+
         if defaultKey then
-            local KeyBtn = Create("TextButton", {Size = UDim2.new(0,72,0,24), Position = UDim2.new(1,-130,0.5,-12), BackgroundColor3 = Theme.Sidebar, Text = "[" .. defaultKey.Name .. "]", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 11, AutoButtonColor = false, Parent = ToggleFrame}, {Create("UICorner", {CornerRadius = UDim.new(0,4)})})
+            local KeyBtn = Create("TextButton", {Size = UDim2.new(0, 72, 0, 24), Position = UDim2.new(1, -58, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = Theme.Sidebar, Text = "[" .. defaultKey.Name .. "]", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 11, AutoButtonColor = false, ZIndex = 2, Parent = ToggleFrame}, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
             table.insert(CreatedElements.Keybinds, {Btn = KeyBtn})
             local currentKey = defaultKey
             local listening = false
-            KeyBtn.MouseButton1Click:Connect(function() listening = true; KeyBtn.Text = "[...]"; KeyBtn.TextColor3 = Theme.TextDim end)
-            table.insert(ToggleKeybinds, {Key = currentKey, GetKey = function() return currentKey end, SetKey = function(k) currentKey = k end, State = function() return state end, SetState = function(s) state = s end, ToggleBtn = ToggleBtn, Circle = Circle, Callback = callback, Text = text, NoNotify = noNotify})
-            local kbIdx = #ToggleKeybinds
+            KeyBtn.MouseButton1Click:Connect(function()
+                listening = true
+                KeyBtn.Text = "[...]"
+                KeyBtn.TextColor3 = Theme.TextDim
+            end)
+            table.insert(ToggleKeybinds, {
+                Key = currentKey,
+                GetKey = function() return currentKey end,
+                SetKey = function(newKey) currentKey = newKey end,
+                State = function() return state end,
+                SetState = function(newState) state = newState end,
+                ToggleBtn = ToggleBtn,
+                Circle = Circle,
+                Callback = callback,
+                Text = text,
+                NoNotify = noNotify
+            })
+            local keybindIndex = #ToggleKeybinds
             UserInputService.InputBegan:Connect(function(input, gpe)
                 if listening and not gpe and input.UserInputType == Enum.UserInputType.Keyboard then
                     ConsumedInputs[input] = true
                     if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
-                        currentKey = nil; KeyBtn.Text = "[Nenhum]"; KeyBtn.TextColor3 = Theme.TextDim; listening = false; ToggleKeybinds[kbIdx].Key = nil; return
+                        currentKey = nil
+                        KeyBtn.Text = "[Nenhum]"
+                        KeyBtn.TextColor3 = Theme.TextDim
+                        listening = false
+                        ToggleKeybinds[keybindIndex].Key = nil
+                        return
                     end
-                    currentKey = input.KeyCode; KeyBtn.Text = "[" .. currentKey.Name .. "]"; KeyBtn.TextColor3 = Theme.Accent; listening = false; ToggleKeybinds[kbIdx].Key = currentKey
+                    currentKey = input.KeyCode
+                    KeyBtn.Text = "[" .. currentKey.Name .. "]"
+                    KeyBtn.TextColor3 = Theme.Accent
+                    listening = false
+                    ToggleKeybinds[keybindIndex].Key = currentKey
                 end
             end)
         end
+
         ToggleBtn.MouseButton1Click:Connect(function()
             state = not state
             CreatedElements.Toggles[myIndex].State = state
             Tween(ToggleBtn, 0.2, {BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff})
-            Tween(Circle, 0.2, {Position = state and UDim2.new(1,-16,0,2) or UDim2.new(0,2,0,2)})
+            Tween(Circle, 0.2, {Position = state and UDim2.new(1, -16, 0, 2) or UDim2.new(0, 2, 0, 2)})
             if not noNotify then NotifyToggle(text, state) end
             if callback then callback(state) end
         end)
+
         AddToSearch(ToggleFrame, text)
         return ToggleFrame
     end
 
     local function CreateSlider(parent, text, min, max, default, callback, noNotify)
         local SliderFrame = Create("Frame", {Size = UDim2.new(1,0,0,48), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(1,-60,0,20), Position = UDim2.new(0,12,0,4), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = SliderFrame})
+        Create("TextLabel", {Size = UDim2.new(1,-60,0,20), Position = UDim2.new(0,12,0,4), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Parent = SliderFrame})
         local ValueLabel = Create("TextLabel", {Size = UDim2.new(0,40,0,20), Position = UDim2.new(1,-50,0,4), BackgroundTransparency = 1, Text = tostring(default), TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = SliderFrame})
         local SliderTrack = Create("Frame", {Size = UDim2.new(1,-24,0,4), Position = UDim2.new(0,12,0,32), BackgroundColor3 = Theme.ToggleOff, Parent = SliderFrame}, {Create("UICorner", {CornerRadius = UDim.new(1,0)})})
         local Fill = Create("Frame", {Size = UDim2.new((default-min)/(max-min),0,1,0), BackgroundColor3 = Theme.SliderFill, Parent = SliderTrack}, {Create("UICorner", {CornerRadius = UDim.new(1,0)})})
@@ -807,7 +615,7 @@ function Library:CreateTab(name, icon)
 
     local function CreateCheckbox(parent, text, defaultState, callback, noNotify)
         local CheckFrame = Create("Frame", {Size = UDim2.new(1,0,0,34), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(1,-60,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = CheckFrame})
+        Create("TextLabel", {Size = UDim2.new(1,-60,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Parent = CheckFrame})
         local Box = Create("TextButton", {Size = UDim2.new(0,18,0,18), Position = UDim2.new(1,-32,0.5,-9), BackgroundColor3 = defaultState and Theme.Accent or Theme.ToggleOff, Text = defaultState and "✓" or "", TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = false, Parent = CheckFrame}, {Create("UICorner", {CornerRadius = UDim.new(0,4)})})
         local state = defaultState
         table.insert(CreatedElements.Checkboxes, {Box = Box, State = state})
@@ -826,7 +634,7 @@ function Library:CreateTab(name, icon)
 
     local function CreateKeybind(parent, text, defaultKey, callback)
         local KeyFrame = Create("Frame", {Size = UDim2.new(1,0,0,38), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(1,-100,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = KeyFrame})
+        Create("TextLabel", {Size = UDim2.new(1,-100,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Parent = KeyFrame})
         local KeyBtn = Create("TextButton", {Size = UDim2.new(0,80,0,24), Position = UDim2.new(1,-95,0.5,-12), BackgroundColor3 = Theme.Sidebar, Text = "[" .. defaultKey.Name .. "]", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, Parent = KeyFrame}, {Create("UICorner", {CornerRadius = UDim.new(0,4)})})
         table.insert(CreatedElements.Keybinds, {Btn = KeyBtn})
         local currentKey = defaultKey
@@ -870,7 +678,7 @@ function Library:CreateTab(name, icon)
         local currentColor = defaultColor or Theme.Accent
         local h, s, v = Color3.toHSV(currentColor)
         local PickerFrame = Create("Frame", {Size = UDim2.new(1,0,0,38), BackgroundColor3 = Theme.ElementBG, Parent = parent}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(1,-60,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = PickerFrame})
+        Create("TextLabel", {Size = UDim2.new(1,-60,1,0), Position = UDim2.new(0,12,0,0), BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Parent = PickerFrame})
         local PreviewBtn = Create("TextButton", {Size = UDim2.new(0,40,0,22), Position = UDim2.new(1,-52,0.5,-11), BackgroundColor3 = currentColor, Text = "", AutoButtonColor = false, Parent = PickerFrame}, {Create("UICorner", {CornerRadius = UDim.new(0,4)}), Create("UIStroke", {Color = Color3.fromRGB(60,60,60), Thickness = 1})})
         local Popup = Create("Frame", {Size = UDim2.new(0,240,0,310), BackgroundColor3 = Color3.fromRGB(20,20,20), BorderSizePixel = 0, Visible = false, Active = true, ZIndex = 999, Parent = screenGui}, {Create("UICorner", {CornerRadius = UDim.new(0,8)}), Create("UIStroke", {Color = Color3.fromRGB(50,50,50), Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})})
         Create("TextLabel", {Size = UDim2.new(1,-20,0,20), Position = UDim2.new(0,12,0,8), BackgroundTransparency = 1, Text = text, TextColor3 = Color3.fromRGB(255,255,255), Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = Popup})
@@ -1042,23 +850,24 @@ function Library:CreateTab(name, icon)
     function TabObject:CreateWelcomeBanner()
         local B = Create("Frame", {Size = UDim2.new(1,0,0,90), BackgroundColor3 = Theme.TabsBG, BorderSizePixel = 0, Parent = Tab.Page}, {Create("UICorner", {CornerRadius = UDim.new(0,8)}), Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})})
         Create("TextLabel", {Size = UDim2.new(1,-20,0,30), Position = UDim2.new(0,15,0,15), BackgroundTransparency = 1, Text = "Bem-vindo, " .. Player.DisplayName .. "!", TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 18, TextXAlignment = Enum.TextXAlignment.Left, Parent = B})
-        Create("TextLabel", {Size = UDim2.new(1,-20,0,30), Position = UDim2.new(0,15,0,45), BackgroundTransparency = 1, Text = "Aproveite o xP Blade Ball. Use o menu lateral para navegar.", TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = B})
+        Create("TextLabel", {Size = UDim2.new(1,-20,0,30), Position = UDim2.new(0,15,0,45), BackgroundTransparency = 1, Text = "Aproveite o xP Hub. Use o menu lateral para navegar.", TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = B})
         return B
     end
 
     function TabObject:CreateInfoCard(title, value)
         local C = Create("Frame", {Size = UDim2.new(1,0,0,40), BackgroundColor3 = Theme.ElementBG, Parent = Tab.Page}, {Create("UICorner", {CornerRadius = UDim.new(0,6)})})
-        Create("TextLabel", {Size = UDim2.new(0.5,-15,1,0), Position = UDim2.new(0,15,0,0), BackgroundTransparency = 1, Text = title, TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = C})
-        Create("TextLabel", {Size = UDim2.new(0.5,-15,1,0), Position = UDim2.new(0.5,0,0,0), BackgroundTransparency = 1, Text = value, TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = C})
+        Create("TextLabel", {Size = UDim2.new(0.5,-15,1,0), Position = UDim2.new(0,15,0,0), BackgroundTransparency = 1, Text = title, TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, Parent = C})
+        Create("TextLabel", {Size = UDim2.new(0.5,-15,1,0), Position = UDim2.new(0.5,0,0,0), BackgroundTransparency = 1, Text = value, TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Center, Parent = C})
         return C
     end
 
     return TabObject
 end
 
--- Keybind global dos toggles
+-- ============================================================
+-- PROCESSAMENTO GLOBAL DOS KEYBINDS DE TOGGLE
+-- ============================================================
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if ConsumedInputs[input] then ConsumedInputs[input] = nil; return end
     for _, kb in pairs(ToggleKeybinds) do
@@ -1074,28 +883,23 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 -- ============================================================
--- MENU PRINCIPAL
+-- MENU
 -- ============================================================
-local xP_UI = Library:CreateWindow("xP BLADE BALL", "Bypass + Anti-Detect", "96698707545893")
+local xP_UI = Library:CreateWindow("xP Hub", "Blade Ball", "96698707545893")
 local ToggleKey = Enum.KeyCode.LeftAlt
 
--- HOME
 local HomeTab = xP_UI:CreateTab("Home", "🏠")
 HomeTab:CreateWelcomeBanner()
 HomeTab:CreateSection("Informações do Usuário")
 HomeTab:CreateInfoCard("Nome", Player.DisplayName)
 HomeTab:CreateInfoCard("Username", "@" .. Player.Name)
 HomeTab:CreateInfoCard("ID", tostring(Player.UserId))
-HomeTab:CreateSection("Status do Bypass")
-HomeTab:CreateInfoCard("Proteção", "✅ Ativa (Multi-Camada)")
-HomeTab:CreateInfoCard("Anti-Detect", "✅ Ativo")
 HomeTab:CreateSection("Atalhos")
 HomeTab:CreateButton("⚔️  Abrir Combat", function() xP_UI:SelectTab("Combat") end)
 HomeTab:CreateButton("👁️  Abrir Visual", function() xP_UI:SelectTab("Visual") end)
 HomeTab:CreateButton("📋  Ver Logs", function() xP_UI:SelectTab("Logs") end)
 HomeTab:CreateButton("⚙️  Abrir Config", function() xP_UI:SelectTab("Config") end)
 
--- COMBAT
 local CombatTab = xP_UI:CreateTab("Combat", "⚔️")
 CombatTab:CreateSearchBar("Pesquisar...")
 local LC = CombatTab:AddLeftGroupbox("Auto Parry")
@@ -1109,7 +913,6 @@ RC:AddToggle("AUTO WIN (SEM LOCK-ON)", false, function(s) Settings.AutoWin = s; 
 RC:AddSlider("PANIC DISTANCE", 5, 100, 25, function(v) Settings.PanicDistance = v end)
 RC:AddSlider("TEMPO REAÇÃO (x100)", 10, 100, 38, function(v) Settings.ReactionTime = v / 100 end)
 
--- VISUAL
 local VisualTab = xP_UI:CreateTab("Visual", "👁️")
 VisualTab:CreateSearchBar("Pesquisar...")
 local LV = VisualTab:AddLeftGroupbox("Câmera")
@@ -1117,33 +920,33 @@ LV:AddSlider("FOV", 50, 120, math.floor(initialFOV), function(v) pcall(function(
 local RV = VisualTab:AddRightGroupbox("Gráficos")
 RV:AddToggle("OTIMIZAÇÃO (FPS)", false, function(s)
     Settings.Otimizacao = s; SetOptimizedMode(s)
-    Library:Notify("Otimização", s and "Modo Otimizado Ativado!" or "Otimização Desativada", 2)
+    Library:Notify("Otimização", s and "Ativado!" or "Desativado", 2)
 end)
 
--- LOGS
 local LogsTab = xP_UI:CreateTab("Logs", "📋")
 LogsTab:CreateSection("Histórico")
 LogsTab:CreateLogContainer()
 LogsTab:AddLog("── LEGENDA ────────────────────")
 LogsTab:AddLog("[+] Nova função")
 LogsTab:AddLog("[=] Correção")
-LogsTab:AddLog("[-] Removido")
 LogsTab:AddLog("──────────────────────────────")
 LogsTab:AddLog("")
-LogsTab:AddLog("[+] Bypass Avançado (namecall/index/newindex/pcall)")
-LogsTab:AddLog("[+] Anti-telemetria HTTP")
-LogsTab:AddLog("[+] Guard de remotes honeypot")
-LogsTab:AddLog("[+] Reaplicação em respawn")
+LogsTab:AddLog("[=] Keybind do menu CORRIGIDA")
+LogsTab:AddLog("[=] Toggle texto cortado corrigido")
+LogsTab:AddLog("[+] Bypass Seguro aplicado")
 LogsTab:AddLog("[=] Lock-On removido do AutoWin")
 LogsTab:AddLog("[+] Humanização de timings")
-LogsTab:AddLog("[+] Toggle Humanize em Config")
-LogsTab:AddLog("[+] UI xP integrada")
+LogsTab:AddLog("[+] xP Hub com Blade Ball no topo")
 
--- CONFIG
 local ConfigTab = xP_UI:CreateTab("Config", "⚙️")
 ConfigTab:CreateSearchBar("Pesquisar...")
 ConfigTab:CreateSection("Interface & Keys")
-ConfigTab:CreateKeybind("Toggle UI Keybind", Enum.KeyCode.LeftAlt, function(key) if key then ToggleKey = key end end)
+ConfigTab:CreateKeybind("Toggle UI Keybind", Enum.KeyCode.LeftAlt, function(key)
+    if key then
+        ToggleKey = key
+        Library:Notify("Keybind", "Nova tecla: " .. key.Name, 2)
+    end
+end)
 ConfigTab:CreateSlider("Menu Scale (%)", 50, 150, 100, function(v) xP_UI.UIScale.Scale = v / 100 end)
 ConfigTab:CreateSection("Anti-Detecção")
 ConfigTab:CreateToggle("HUMANIZE TIMING", true, function(s) Settings.Humanize = s end)
@@ -1153,14 +956,19 @@ ConfigTab:CreateColorPicker("Cor do Menu", Color3.fromRGB(8, 65, 135), function(
 ConfigTab:CreateSection("Unload")
 ConfigTab:CreateRedButton("Unload Script", function() xP_UI.ScreenGui:Destroy() end)
 
--- KEYBIND DO MENU
+-- ============================================================
+-- KEYBIND DO MENU (Toggle UI) — CORRIGIDO
+-- ============================================================
 local uiVisible = true
+
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == ToggleKey then
-        uiVisible = not uiVisible
-        xP_UI.MainFrame.Visible = uiVisible
+    -- ✅ NÃO checa `gpe` porque LeftAlt pode vir marcado como processado
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == ToggleKey then
+            uiVisible = not uiVisible
+            xP_UI.MainFrame.Visible = uiVisible
+        end
     end
 end)
 
-xP_UI:Notify("xP Blade Ball", "Script carregado com Bypass Ativo!", 4)
+xP_UI:Notify("xP Hub", "Script carregado!", 4)
