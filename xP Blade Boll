@@ -1,5 +1,5 @@
 -- ============================================================
--- xP Hub - Blade Ball (Detecção Híbrida + Combat Unificado)
+-- xP Hub - Blade Ball (Sem Humanize)
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -77,7 +77,6 @@ local Settings = {
     PanicDistance = 25,
     SpamSpeed = 5,
     Otimizacao = false,
-    Humanize = true,
     SpeedThreshold = 85,
     UseAccuracy = true,
 }
@@ -202,12 +201,11 @@ local function GetBallSpeed(ball)
 end
 
 -- ============================================================
--- AÇÕES
+-- AÇÕES (delays FIXOS - sem humanize)
 -- ============================================================
 local function SendParry()
     local now = tick()
-    local minGap = Settings.Humanize and (0.07 + math.random() * 0.03) or 0.1
-    if now - LastParry < minGap then return end
+    if now - LastParry < 0.1 then return end
     LastParry = now
 
     local useRemote = math.random() > 0.4
@@ -227,19 +225,18 @@ local function SendParry()
 
     pcall(function()
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        task.wait(math.random(8, 20) / 1000)
+        task.wait(0.012)
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
     end)
 end
 
 local function SendAbility()
     local now = tick()
-    local minGap = Settings.Humanize and (1.15 + math.random() * 0.2) or 1.2
-    if now - LastAbility < minGap then return end
+    if now - LastAbility < 1.2 then return end
     LastAbility = now
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-        task.wait(math.random(10, 25) / 1000)
+        task.wait(0.01)
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
     end)
 end
@@ -290,7 +287,7 @@ local function AutoSpamLogic()
     if not Settings.AutoSpam or not SpamActive then return end
     for i = 1, math.floor(Settings.SpamSpeed) do
         SendParry()
-        task.wait(Settings.Humanize and (0.02 + math.random() * 0.02) or 0.03)
+        task.wait(0.03)
     end
 end
 
@@ -366,10 +363,8 @@ RunService.RenderStepped:Connect(function(dt)
         end
 
         if shouldParry then
-            local jitter = math.random() * 0.02
             local safeDelay = math.clamp(0.02 + (velocityMagnitude / 250), 0.01, 0.1)
-
-            if (tick() - LastParry) > (safeDelay + jitter) then
+            if (tick() - LastParry) > safeDelay then
                 SendParry()
                 LastParry = tick()
             end
@@ -878,7 +873,6 @@ function Library:CreateTab(name, icon)
         return CreateGroupbox(Tab.RightColumn, title)
     end
 
-    -- ✅ NOVO: Groupbox de largura total (não depende das colunas)
     function TabObject:CreateGroupbox(title)
         return CreateGroupbox(Tab.Page, title)
     end
@@ -953,11 +947,10 @@ HomeTab:CreateButton("👁️  Abrir Visual", function() xP_UI:SelectTab("Visual
 HomeTab:CreateButton("📋  Ver Logs", function() xP_UI:SelectTab("Logs") end)
 HomeTab:CreateButton("⚙️  Abrir Config", function() xP_UI:SelectTab("Config") end)
 
--- ⚔️ COMBAT (agora com Detecção integrada)
+-- COMBAT
 local CombatTab = xP_UI:CreateTab("Combat", "⚔️")
 CombatTab:CreateSearchBar("Pesquisar...")
 
--- Linha 1: Auto Parry (esquerda) + Habilidades & AutoWin (direita)
 local LC = CombatTab:AddLeftGroupbox("Auto Parry")
 LC:AddToggle("AUTO PARRY", false, function(s) Settings.AutoParry = s end)
 LC:AddToggle("AUTO SPAM", false, function(s) Settings.AutoSpam = s end)
@@ -969,8 +962,7 @@ RC:AddToggle("PANIC ABILITY", false, function(s) Settings.PanicAbility = s end)
 RC:AddToggle("AUTO WIN (SEM LOCK-ON)", false, function(s) Settings.AutoWin = s; AutoWinActive = s end)
 RC:AddSlider("PANIC DISTANCE", 5, 100, 25, function(v) Settings.PanicDistance = v end)
 
--- Linha 2 (embaixo): Detecção Avançada (largura total)
-local DetectSection = CombatTab:CreateSection("🎯 Detecção Avançada")
+CombatTab:CreateSection("🎯 Detecção Avançada")
 local DetectBox = CombatTab:CreateGroupbox("Configurações de Detecção")
 DetectBox:AddToggle("USAR ACCURACY (DOT)", true, function(s) Settings.UseAccuracy = s end)
 DetectBox:AddSlider("SPEED THRESHOLD", 20, 200, 85, function(v) Settings.SpeedThreshold = v end)
@@ -997,13 +989,12 @@ LogsTab:AddLog("[=] Correção")
 LogsTab:AddLog("[-] Removido")
 LogsTab:AddLog("──────────────────────────────")
 LogsTab:AddLog("")
-LogsTab:AddLog("[=] Aba Detecção movida para dentro do Combat")
-LogsTab:AddLog("[+] Combat agora tem 3 seções organizadas")
+LogsTab:AddLog("[-] HUMANIZE TIMING removido por completo")
+LogsTab:AddLog("[=] Delays agora são fixos (mais rápido)")
 LogsTab:AddLog("[+] Detecção Híbrida: RealBall + BallShadow")
 LogsTab:AddLog("[+] Predição de trajetória (leadTime)")
 LogsTab:AddLog("[+] Accuracy via dot product")
-LogsTab:AddLog("[-] Raycast IsPathBlocked removido")
-LogsTab:AddLog("[-] Ping Adaptativo removido")
+LogsTab:AddLog("[=] Aba Detecção dentro do Combat")
 
 -- CONFIG
 local ConfigTab = xP_UI:CreateTab("Config", "⚙️")
@@ -1016,8 +1007,7 @@ ConfigTab:CreateKeybind("Toggle UI Keybind", Enum.KeyCode.LeftAlt, function(key)
     end
 end)
 ConfigTab:CreateSlider("Menu Scale (%)", 50, 150, 100, function(v) xP_UI.UIScale.Scale = v / 100 end)
-ConfigTab:CreateSection("Anti-Detecção")
-ConfigTab:CreateToggle("HUMANIZE TIMING", true, function(s) Settings.Humanize = s end)
+ConfigTab:CreateSection("Notificações")
 ConfigTab:CreateCheckbox("Enable Notifications", true, function(s) NotificationsEnabled = s end)
 ConfigTab:CreateSection("Tema do Menu")
 ConfigTab:CreateColorPicker("Cor do Menu", Color3.fromRGB(8, 65, 135), function(color) end)
@@ -1037,4 +1027,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-xP_UI:Notify("xP Hub", "Combat com Detecção integrada!", 4)
+xP_UI:Notify("xP Hub", "Script carregado!", 4)
