@@ -1,173 +1,1564 @@
 repeat wait() until game:IsLoaded()
 
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+-- Flag global de vida: quando false, todos os loops/threads param
+getgenv()._xPHub_ALIVE = true
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- ============================================================
+-- xP UI LIBRARY (inline)
+-- ============================================================
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+
 local LocalPlayer = Players.LocalPlayer
 
--- ============================================================
--- CONFIGURAÇÕES DAS FEATURES
--- ============================================================
-local Features = {
-    KillAura = {
-        enabled = false,
-        key = Enum.KeyCode.E,
-        config = { IgnoreFriends = true, MaxDistance = 100, Damage = 1, HealthLimit = 0, DashInterval = 0.7 }
-    },
-    TPWalk = {
-        enabled = false,
-        key = Enum.KeyCode.T,
-        config = { Speed = 1.5 }
-    },
-    NoCooldown = { enabled = false, key = Enum.KeyCode.Unknown },
-    NoStun = { enabled = false, key = Enum.KeyCode.Unknown },
-    InfiniteUltimate = { enabled = false, key = Enum.KeyCode.Unknown },
-    XRay = {
-        enabled = false,
-        key = Enum.KeyCode.Unknown,
-        config = { transparency = 0.5 }
-    }
+local Theme = {
+    Background = Color3.fromRGB(15, 15, 15),
+    Sidebar = Color3.fromRGB(10, 10, 10),
+    ElementBG = Color3.fromRGB(22, 22, 22),
+    GroupboxBG = Color3.fromRGB(18, 18, 18),
+    Separator = Color3.fromRGB(45, 45, 45),
+    SearchBG = Color3.fromRGB(30, 30, 30),
+    Accent = Color3.fromRGB(8, 65, 135),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextDim = Color3.fromRGB(140, 140, 140),
+    ToggleOn = Color3.fromRGB(8, 65, 135),
+    ToggleOff = Color3.fromRGB(50, 50, 50),
+    SliderFill = Color3.fromRGB(8, 65, 135),
+    TopBar = Color3.fromRGB(19, 19, 19),
+    Profile = Color3.fromRGB(21, 21, 21),
+    TabsBG = Color3.fromRGB(16, 16, 16),
+    LogAdd = Color3.fromRGB(80, 220, 120),
+    LogRemove = Color3.fromRGB(220, 70, 70),
+    LogFix = Color3.fromRGB(240, 200, 60),
 }
 
-local killAuraConn = nil
-local tpwalkConn = nil
-local lastDash = 0
-local xrayConnection = nil
+local ORIGINAL_COLOR = Color3.fromRGB(8, 65, 135)
+local NotificationsEnabled = true
+local ConsumedInputs = {}
 
--- Tabela para armazenar os objetos toggle
-local ToggleObjects = {}
+local function Create(instance, properties, children)
+    local obj = Instance.new(instance)
+    for k, v in pairs(properties) do obj[k] = v end
+    if children then
+        for _, child in ipairs(children) do child.Parent = obj end
+    end
+    return obj
+end
+
+local function Tween(obj, time, properties)
+    TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), properties):Play()
+end
+
+local Library = {}
+Library.__index = Library
+
+local CreatedElements = {
+    Toggles = {}, Sliders = {}, Checkboxes = {},
+    TabButtons = {}, Keybinds = {}, Notifications = {}, NotifAccentBars = {},
+}
+local ToggleKeybinds = {}
+local NotifContainer
+
+function Library:Notify(title, text, duration)
+    if not NotificationsEnabled then return end
+    if not NotifContainer then return end
+    duration = duration or 4
+
+    local Notif = Create("Frame", {
+        Size = UDim2.new(0, 280, 0, 60),
+        Position = UDim2.new(1, 320, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+        BorderSizePixel = 0,
+        ClipsDescendants = false,
+        Parent = NotifContainer
+    }, {
+        Create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+        Create("UIStroke", {Color = Color3.fromRGB(45, 45, 45), Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    })
+
+    local ClickBtn = Create("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+        Text = "", AutoButtonColor = false, ZIndex = 5, Parent = Notif
+    })
+
+    local AccentBar = Create("Frame", {
+        Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0, Parent = Notif
+    }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+    table.insert(CreatedElements.NotifAccentBars, AccentBar)
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -25, 0, 20), Position = UDim2.new(0, 15, 0, 8),
+        BackgroundTransparency = 1, Text = title, TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamBold, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = Notif
+    })
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -25, 0, 22), Position = UDim2.new(0, 15, 0, 28),
+        BackgroundTransparency = 1, Text = text, TextColor3 = Color3.fromRGB(180, 180, 180),
+        Font = Enum.Font.Gotham, TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = Notif
+    })
+
+    local isClosing = false
+    local function closeNotif()
+        if isClosing then return end
+        isClosing = true
+        for i, n in ipairs(CreatedElements.Notifications) do
+            if n == Notif then table.remove(CreatedElements.Notifications, i); break end
+        end
+        Tween(Notif, 0.35, {Position = UDim2.new(1, 320, 0, Notif.Position.Y.Offset), BackgroundTransparency = 1})
+        for _, child in pairs(Notif:GetDescendants()) do
+            if child:IsA("TextLabel") then
+                Tween(child, 0.35, {TextTransparency = 1})
+            elseif child:IsA("Frame") and child ~= Notif then
+                Tween(child, 0.35, {BackgroundTransparency = 1})
+            elseif child:IsA("UIStroke") then
+                Tween(child, 0.35, {Transparency = 1})
+            end
+        end
+        task.wait(0.4)
+        if Notif and Notif.Parent then Notif:Destroy() end
+    end
+
+    ClickBtn.MouseButton1Click:Connect(closeNotif)
+    ClickBtn.MouseEnter:Connect(function() Tween(Notif, 0.2, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}) end)
+    ClickBtn.MouseLeave:Connect(function() Tween(Notif, 0.2, {BackgroundColor3 = Color3.fromRGB(20, 20, 20)}) end)
+
+    Tween(Notif, 0.4, {Position = UDim2.new(1, -295, 0, 0)})
+    table.insert(CreatedElements.Notifications, Notif)
+    task.delay(duration, function() closeNotif() end)
+end
+
+local function NotifyToggle(toggleText, state)
+    Library:Notify(toggleText, "Status: " .. (state and "Ativado" or "Desativado"), 3)
+end
+local function NotifyCheckbox(text, state)
+    Library:Notify(text, "Status: " .. (state and "Marcado" or "Desmarcado"), 3)
+end
+local function NotifySlider(text, value)
+    Library:Notify(text, "Valor: " .. value, 3)
+end
+
+function Library:CreateWindow(title, subtitle, logoId)
+    local Window = {}
+    setmetatable(Window, Library)
+    Window.Tabs = {}
+    Window.ActiveTab = nil
+
+    Window.ScreenGui = Create("ScreenGui", {
+        Name = "xP_UI_Library", Parent = CoreGui,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    })
+
+    Window.MainFrame = Create("Frame", {
+        Name = "MainFrame",
+        Size = UDim2.new(0, 700, 0, 450),
+        Position = UDim2.new(0.5, -350, 0.5, -225),
+        BackgroundColor3 = Theme.Background, BorderSizePixel = 0,
+        ClipsDescendants = true, Parent = Window.ScreenGui
+    }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+    Window.UIScale = Create("UIScale", {Name = "MenuScale", Scale = 1, Parent = Window.MainFrame})
+
+    NotifContainer = Create("Frame", {
+        Name = "NotifContainer",
+        Size = UDim2.new(0, 320, 1, -20),
+        Position = UDim2.new(1, -330, 0, 10),
+        BackgroundTransparency = 1, Parent = Window.ScreenGui
+    }, {
+        Create("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder,
+            VerticalAlignment = Enum.VerticalAlignment.Top, HorizontalAlignment = Enum.HorizontalAlignment.Right})
+    })
+
+    local TopBar = Create("Frame", {
+        Name = "TopBar", Size = UDim2.new(1, 0, 0, 45),
+        BackgroundColor3 = Theme.TopBar, BackgroundTransparency = 0,
+        Parent = Window.MainFrame
+    }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+    if logoId then
+        Create("ImageLabel", {
+            Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(0, 15, 0.5, -18),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://" .. tostring(logoId),
+            Parent = TopBar
+        })
+    end
+
+    Create("TextLabel", {
+        Size = UDim2.new(0, 200, 1, 0), Position = UDim2.new(0, 65, 0, 0),
+        BackgroundTransparency = 1, Text = title, TextColor3 = Theme.Text,
+        Font = Enum.Font.GothamBold, TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = TopBar
+    })
+
+    Create("TextLabel", {
+        Size = UDim2.new(0, 250, 1, 0), Position = UDim2.new(0, 135, 0, 0),
+        BackgroundTransparency = 1, Text = "|  " .. subtitle,
+        TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = TopBar
+    })
+
+    local CloseBtn = Create("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -40, 0.5, -15),
+        BackgroundTransparency = 1, Text = "X", TextColor3 = Theme.TextDim,
+        Font = Enum.Font.GothamBold, TextSize = 14, Parent = TopBar
+    })
+    CloseBtn.MouseButton1Click:Connect(function() Window.ScreenGui:Destroy() end)
+
+    local dragging, dragInput, dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; dragStart = input.Position; startPos = Window.MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    TopBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            Window.MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    Window.Sidebar = Create("Frame", {
+        Size = UDim2.new(0, 180, 1, -45), Position = UDim2.new(0, 0, 0, 45),
+        BackgroundColor3 = Theme.Sidebar, BorderSizePixel = 0, Parent = Window.MainFrame
+    })
+
+    Window.TabsContainer = Create("Frame", {
+        Name = "TabsContainer", Size = UDim2.new(1, -20, 1, -80),
+        Position = UDim2.new(0, 10, 0, 10),
+        BackgroundColor3 = Theme.TabsBG, BorderSizePixel = 0, Parent = Window.Sidebar
+    }, {
+        Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+        Create("UIListLayout", {Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder}),
+        Create("UIPadding", {PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)})
+    })
+
+    local ProfileFrame = Create("Frame", {
+        Size = UDim2.new(0, 160, 0, 50), Position = UDim2.new(0, 10, 1, -60),
+        BackgroundColor3 = Theme.Profile, BackgroundTransparency = 0,
+        BorderSizePixel = 0, Parent = Window.MainFrame
+    }, {
+        Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+        Create("UIStroke", {Color = Theme.Profile, Thickness = 1.5, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    })
+
+    Create("ImageLabel", {
+        Size = UDim2.new(0, 32, 0, 32), Position = UDim2.new(0, 10, 0.5, -16),
+        BackgroundColor3 = Theme.ToggleOff,
+        Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150",
+        Parent = ProfileFrame
+    }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -50, 0, 14), Position = UDim2.new(0, 48, 0, 9),
+        BackgroundTransparency = 1, Text = LocalPlayer.DisplayName,
+        TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = ProfileFrame
+    })
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -50, 0, 12), Position = UDim2.new(0, 48, 0, 24),
+        BackgroundTransparency = 1, Text = "@" .. LocalPlayer.Name,
+        TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = ProfileFrame
+    })
+
+    Window.PagesContainer = Create("Frame", {
+        Size = UDim2.new(1, -180, 1, -45), Position = UDim2.new(0, 180, 0, 45),
+        BackgroundTransparency = 1, Parent = Window.MainFrame
+    })
+
+    return Window
+end
+
+function Library:SelectTab(tabName)
+    for _, tab in pairs(self.Tabs) do
+        if tab.Name == tabName then
+            for _, otherTab in pairs(self.Tabs) do
+                otherTab.Button.BackgroundColor3 = Theme.TabsBG
+                otherTab.Button.Font = Enum.Font.GothamSemibold
+                otherTab.Page.Visible = false
+            end
+            tab.Button.BackgroundColor3 = Theme.Accent
+            tab.Button.Font = Enum.Font.GothamBold
+            tab.Page.Visible = true
+            self.ActiveTab = tab
+            return true
+        end
+    end
+    return false
+end
+
+function Library:UpdateTheme(newColor)
+    Theme.Accent = newColor
+    Theme.ToggleOn = newColor
+    Theme.SliderFill = newColor
+    for _, tabBtn in pairs(CreatedElements.TabButtons) do
+        if tabBtn.BackgroundColor3 ~= Theme.Sidebar and tabBtn.BackgroundColor3 ~= Theme.TabsBG then
+            tabBtn.BackgroundColor3 = newColor
+        end
+    end
+    for _, toggleData in pairs(CreatedElements.Toggles) do
+        if toggleData.State then toggleData.Btn.BackgroundColor3 = newColor end
+    end
+    for _, sliderData in pairs(CreatedElements.Sliders) do
+        sliderData.Fill.BackgroundColor3 = newColor
+        sliderData.ValueLabel.TextColor3 = newColor
+    end
+    for _, checkData in pairs(CreatedElements.Checkboxes) do
+        if checkData.State then checkData.Box.BackgroundColor3 = newColor end
+    end
+    for _, keybindData in pairs(CreatedElements.Keybinds) do
+        keybindData.Btn.TextColor3 = newColor
+    end
+    for _, accentBar in pairs(CreatedElements.NotifAccentBars) do
+        if accentBar and accentBar.Parent then accentBar.BackgroundColor3 = newColor end
+    end
+end
+
+function Library:CreateTab(name, icon)
+    local Tab = {}
+    Tab.Name = name
+    Tab.Elements = {}
+    local screenGui = self.ScreenGui
+
+    Tab.Button = Create("TextButton", {
+        Name = name, Size = UDim2.new(1, 0, 0, 32),
+        BackgroundColor3 = Theme.TabsBG, Text = "  " .. icon .. "  " .. name,
+        TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false,
+        Parent = self.TabsContainer
+    }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+    table.insert(CreatedElements.TabButtons, Tab.Button)
+
+    Tab.Page = Create("ScrollingFrame", {
+        Name = name, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+        Visible = false, BorderSizePixel = 0, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent, ScrollBarImageTransparency = 0.3,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ElasticBehavior = Enum.ElasticBehavior.Never, Parent = self.PagesContainer
+    }, {
+        Create("UIListLayout", {Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder}),
+        Create("UIPadding", {PaddingTop = UDim.new(0, 20), PaddingBottom = UDim.new(0, 20),
+            PaddingLeft = UDim.new(0, 20), PaddingRight = UDim.new(0, 20)})
+    })
+
+    Tab.Button.MouseButton1Click:Connect(function()
+        for _, otherTab in pairs(self.Tabs) do
+            otherTab.Button.BackgroundColor3 = Theme.TabsBG
+            otherTab.Button.Font = Enum.Font.GothamSemibold
+            otherTab.Page.Visible = false
+        end
+        Tab.Button.BackgroundColor3 = Theme.Accent
+        Tab.Button.Font = Enum.Font.GothamBold
+        Tab.Page.Visible = true
+        self.ActiveTab = Tab
+    end)
+
+    table.insert(self.Tabs, Tab)
+
+    if #self.Tabs == 1 then
+        Tab.Button.BackgroundColor3 = Theme.Accent
+        Tab.Button.Font = Enum.Font.GothamBold
+        Tab.Page.Visible = true
+        self.ActiveTab = Tab
+    end
+
+    local TabObject = {}
+    local function AddToSearch(frame, searchText)
+        table.insert(Tab.Elements, {Frame = frame, SearchText = searchText or ""})
+    end
+
+    local function CreateToggle(parent, text, defaultState, callback, defaultKey, noNotify)
+        local ToggleFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.ElementBG, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        local textWidth = defaultKey and -130 or -60
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, textWidth, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
+            Font = Enum.Font.GothamSemibold, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = ToggleFrame
+        })
+
+        local ToggleBtn = Create("TextButton", {
+            Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -50, 0.5, -9),
+            BackgroundColor3 = defaultState and Theme.ToggleOn or Theme.ToggleOff,
+            Text = "", AutoButtonColor = false, Parent = ToggleFrame
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        local Circle = Create("Frame", {
+            Size = UDim2.new(0, 14, 0, 14),
+            Position = defaultState and UDim2.new(1, -16, 0, 2) or UDim2.new(0, 2, 0, 2),
+            BackgroundColor3 = Theme.Text, Parent = ToggleBtn
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        local state = defaultState
+        table.insert(CreatedElements.Toggles, {Btn = ToggleBtn, State = state})
+        local myIndex = #CreatedElements.Toggles
+
+        if defaultKey then
+            local hasKey = (defaultKey ~= Enum.KeyCode.Unknown)
+            local KeyBtn = Create("TextButton", {
+                Size = UDim2.new(0, 72, 0, 24), Position = UDim2.new(1, -130, 0.5, -12),
+                BackgroundColor3 = Theme.Sidebar,
+                Text = hasKey and ("[" .. defaultKey.Name .. "]") or "[Nenhum]",
+                TextColor3 = hasKey and Theme.Accent or Theme.TextDim,
+                Font = Enum.Font.GothamBold, TextSize = 11,
+                AutoButtonColor = false, Parent = ToggleFrame
+            }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
+
+            table.insert(CreatedElements.Keybinds, {Btn = KeyBtn})
+
+            local currentKey = hasKey and defaultKey or nil
+            local listening = false
+
+            KeyBtn.MouseButton1Click:Connect(function()
+                listening = true
+                KeyBtn.Text = "[...]"
+                KeyBtn.TextColor3 = Theme.TextDim
+            end)
+
+            table.insert(ToggleKeybinds, {
+                Key = currentKey,
+                GetKey = function() return currentKey end,
+                SetKey = function(newKey) currentKey = newKey end,
+                State = function() return state end,
+                SetState = function(newState) state = newState end,
+                ToggleBtn = ToggleBtn, Circle = Circle,
+                Callback = callback, Text = text, NoNotify = noNotify
+            })
+            local keybindIndex = #ToggleKeybinds
+
+            UserInputService.InputBegan:Connect(function(input, gpe)
+                if listening and not gpe then
+                    if input.UserInputType == Enum.UserInputType.Keyboard then
+                        ConsumedInputs[input] = true
+                        if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
+                            currentKey = nil
+                            KeyBtn.Text = "[Nenhum]"
+                            KeyBtn.TextColor3 = Theme.TextDim
+                            listening = false
+                            ToggleKeybinds[keybindIndex].Key = nil
+                            return
+                        end
+                        currentKey = input.KeyCode
+                        KeyBtn.Text = "[" .. currentKey.Name .. "]"
+                        KeyBtn.TextColor3 = Theme.Accent
+                        listening = false
+                        ToggleKeybinds[keybindIndex].Key = currentKey
+                    end
+                end
+            end)
+        end
+
+        ToggleBtn.MouseButton1Click:Connect(function()
+            state = not state
+            CreatedElements.Toggles[myIndex].State = state
+            Tween(ToggleBtn, 0.2, {BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff})
+            Tween(Circle, 0.2, {Position = state and UDim2.new(1, -16, 0, 2) or UDim2.new(0, 2, 0, 2)})
+            if not noNotify then NotifyToggle(text, state) end
+            if callback then callback(state) end
+        end)
+
+        AddToSearch(ToggleFrame, text)
+        return ToggleFrame
+    end
+
+    local function CreateSlider(parent, text, min, max, default, callback, noNotify)
+        local SliderFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = Theme.ElementBG, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -60, 0, 20), Position = UDim2.new(0, 12, 0, 4),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
+            Font = Enum.Font.GothamSemibold, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = SliderFrame
+        })
+
+        local ValueLabel = Create("TextLabel", {
+            Size = UDim2.new(0, 40, 0, 20), Position = UDim2.new(1, -50, 0, 4),
+            BackgroundTransparency = 1, Text = tostring(default),
+            TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Right, Parent = SliderFrame
+        })
+
+        local SliderTrack = Create("Frame", {
+            Size = UDim2.new(1, -24, 0, 4), Position = UDim2.new(0, 12, 0, 32),
+            BackgroundColor3 = Theme.ToggleOff, Parent = SliderFrame
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        local Fill = Create("Frame", {
+            Size = UDim2.new((default - min) / (max - min), 0, 1, 0),
+            BackgroundColor3 = Theme.SliderFill, Parent = SliderTrack
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        local Knob = Create("Frame", {
+            Size = UDim2.new(0, 12, 0, 12), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new((default - min) / (max - min), 0, 0.5, 0),
+            BackgroundColor3 = Theme.Text, Parent = SliderTrack
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        table.insert(CreatedElements.Sliders, {Fill = Fill, ValueLabel = ValueLabel})
+
+        local draggingSlider = false
+        local val = default
+
+        local function UpdateSlider(input)
+            local pos = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
+            val = math.floor((max - min) * pos + min)
+            ValueLabel.Text = tostring(val)
+            Tween(Fill, 0.1, {Size = UDim2.new(pos, 0, 1, 0)})
+            Tween(Knob, 0.1, {Position = UDim2.new(pos, 0, 0.5, 0)})
+            if callback then callback(val) end
+        end
+
+        SliderTrack.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = true; UpdateSlider(input) end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider(input) end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 and draggingSlider then
+                draggingSlider = false
+                if not noNotify then NotifySlider(text, val) end
+            end
+        end)
+
+        AddToSearch(SliderFrame, text)
+        return SliderFrame
+    end
+
+    local function CreateCheckbox(parent, text, defaultState, callback, noNotify)
+        local CheckFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = Theme.ElementBG, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
+            Font = Enum.Font.Gotham, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = CheckFrame
+        })
+
+        local Box = Create("TextButton", {
+            Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(1, -32, 0.5, -9),
+            BackgroundColor3 = defaultState and Theme.Accent or Theme.ToggleOff,
+            Text = defaultState and "✓" or "", TextColor3 = Theme.Text,
+            Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = false,
+            Parent = CheckFrame
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
+
+        local state = defaultState
+        table.insert(CreatedElements.Checkboxes, {Box = Box, State = state})
+        local myIndex = #CreatedElements.Checkboxes
+
+        Box.MouseButton1Click:Connect(function()
+            state = not state
+            CreatedElements.Checkboxes[myIndex].State = state
+            Box.Text = state and "✓" or ""
+            Tween(Box, 0.2, {BackgroundColor3 = state and Theme.Accent or Theme.ToggleOff})
+            if not noNotify then NotifyCheckbox(text, state) end
+            if callback then callback(state) end
+        end)
+
+        AddToSearch(CheckFrame, text)
+        return CheckFrame
+    end
+
+    local function CreateKeybind(parent, text, defaultKey, callback)
+        local KeyFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.ElementBG, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -100, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
+            Font = Enum.Font.Gotham, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = KeyFrame
+        })
+
+        local KeyBtn = Create("TextButton", {
+            Size = UDim2.new(0, 80, 0, 24), Position = UDim2.new(1, -95, 0.5, -12),
+            BackgroundColor3 = Theme.Sidebar, Text = "[" .. (defaultKey and defaultKey.Name or "Nenhum") .. "]",
+            TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 12,
+            AutoButtonColor = false, Parent = KeyFrame
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
+
+        table.insert(CreatedElements.Keybinds, {Btn = KeyBtn})
+
+        local currentKey = defaultKey
+        local listening = false
+
+        KeyBtn.MouseButton1Click:Connect(function()
+            listening = true
+            KeyBtn.Text = "[...]"
+            KeyBtn.TextColor3 = Theme.TextDim
+        end)
+
+        UserInputService.InputBegan:Connect(function(input, gpe)
+            if listening and not gpe then
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    ConsumedInputs[input] = true
+                    if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
+                        currentKey = nil
+                        KeyBtn.Text = "[Nenhum]"
+                        KeyBtn.TextColor3 = Theme.TextDim
+                        listening = false
+                        if callback then callback(nil) end
+                        return
+                    end
+                    currentKey = input.KeyCode
+                    KeyBtn.Text = "[" .. currentKey.Name .. "]"
+                    KeyBtn.TextColor3 = Theme.Accent
+                    listening = false
+                    if callback then callback(currentKey) end
+                end
+            end
+        end)
+
+        AddToSearch(KeyFrame, text)
+        return KeyFrame
+    end
+
+    local function CreateButton(parent, text, callback)
+        local Btn = Create("TextButton", {
+            Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = Theme.ElementBG,
+            Text = text, TextColor3 = Theme.Text, Font = Enum.Font.GothamSemibold,
+            TextSize = 13, AutoButtonColor = false, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Btn.MouseEnter:Connect(function() Tween(Btn, 0.2, {BackgroundColor3 = Theme.Sidebar}) end)
+        Btn.MouseLeave:Connect(function() Tween(Btn, 0.2, {BackgroundColor3 = Theme.ElementBG}) end)
+        Btn.MouseButton1Click:Connect(function() if callback then callback() end end)
+
+        AddToSearch(Btn, text)
+        return Btn
+    end
+
+    local function CreateRedButton(parent, text, callback)
+        local Btn = Create("TextButton", {
+            Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = Color3.fromRGB(170, 45, 45),
+            Text = text, TextColor3 = Color3.fromRGB(255, 255, 255),
+            Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = false, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Btn.MouseEnter:Connect(function() Tween(Btn, 0.2, {BackgroundColor3 = Color3.fromRGB(200, 60, 60)}) end)
+        Btn.MouseLeave:Connect(function() Tween(Btn, 0.2, {BackgroundColor3 = Color3.fromRGB(170, 45, 45)}) end)
+        Btn.MouseButton1Click:Connect(function() if callback then callback() end end)
+
+        AddToSearch(Btn, text)
+        return Btn
+    end
+
+    local function CreateColorPicker(parent, text, defaultColor, callback, noTheme)
+        local currentColor = defaultColor or Theme.Accent
+        local h, s, v = Color3.toHSV(currentColor)
+
+        local PickerFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.ElementBG, Parent = parent
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
+            Font = Enum.Font.Gotham, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = PickerFrame
+        })
+
+        local PreviewBtn = Create("TextButton", {
+            Size = UDim2.new(0, 40, 0, 22), Position = UDim2.new(1, -52, 0.5, -11),
+            BackgroundColor3 = currentColor, Text = "", AutoButtonColor = false, Parent = PickerFrame
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 4)}),
+            Create("UIStroke", {Color = Color3.fromRGB(60, 60, 60), Thickness = 1})
+        })
+
+        local Popup = Create("Frame", {
+            Size = UDim2.new(0, 240, 0, 310), BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+            BorderSizePixel = 0, Visible = false, Active = true, ZIndex = 999, Parent = screenGui
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+            Create("UIStroke", {Color = Color3.fromRGB(50, 50, 50), Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+        })
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 12, 0, 8),
+            BackgroundTransparency = 1, Text = text, TextColor3 = Color3.fromRGB(255, 255, 255),
+            Font = Enum.Font.GothamBold, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Popup
+        })
+
+        local ColorBox = Create("Frame", {
+            Size = UDim2.new(1, -24, 0, 130), Position = UDim2.new(0, 12, 0, 32),
+            BackgroundColor3 = Color3.fromHSV(h, 1, 1), BorderSizePixel = 0, Active = true, Parent = Popup
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
+
+        Create("Frame", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0, Active = true, Parent = ColorBox
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)}),
+            Create("UIGradient", {Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1)})})})
+
+        Create("Frame", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BorderSizePixel = 0, Active = true, Parent = ColorBox
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)}),
+            Create("UIGradient", {Rotation = 90, Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0)})})})
+
+        local Crosshair = Create("Frame", {
+            Size = UDim2.new(0, 10, 0, 10), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(s, 0, 1 - v, 0), BackgroundTransparency = 1,
+            ZIndex = 2, Parent = ColorBox
+        }, {Create("UIStroke", {Color = Color3.fromRGB(255, 255, 255), Thickness = 2}),
+            Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        local HueSlider = Create("Frame", {
+            Size = UDim2.new(1, -24, 0, 14), Position = UDim2.new(0, 12, 0, 172),
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30), BorderSizePixel = 0, Active = true, Parent = Popup
+        }, {Create("UICorner", {CornerRadius = UDim.new(1, 0)})})
+
+        for i = 0, 20 do
+            Create("Frame", {
+                Size = UDim2.new(1/21, 1, 1, 0), Position = UDim2.new(i/21, 0, 0, 0),
+                BackgroundColor3 = Color3.fromHSV(i/20, 1, 1), BorderSizePixel = 0,
+                Active = true, Parent = HueSlider
+            })
+        end
+
+        local HueKnob = Create("Frame", {
+            Size = UDim2.new(0, 8, 0, 18), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(h, 0, 0.5, 0), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            ZIndex = 2, Parent = HueSlider
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 2)}),
+            Create("UIStroke", {Color = Color3.fromRGB(0, 0, 0), Thickness = 1})})
+
+        local RGBDisplay = Create("TextLabel", {
+            Size = UDim2.new(0, 150, 0, 20), Position = UDim2.new(0, 12, 0, 196),
+            BackgroundTransparency = 1, Text = "RGB: 0, 0, 0",
+            TextColor3 = Color3.fromRGB(200, 200, 200), Font = Enum.Font.Code, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Popup
+        })
+
+        local BigPreview = Create("Frame", {
+            Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 0, 224),
+            BackgroundColor3 = currentColor, BorderSizePixel = 0, Parent = Popup
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)}),
+            Create("UIStroke", {Color = Color3.fromRGB(60, 60, 60), Thickness = 1})})
+
+        local ResetBtn = Create("TextButton", {
+            Size = UDim2.new(1, -24, 0, 26), Position = UDim2.new(0, 12, 0, 266),
+            BackgroundColor3 = Color3.fromRGB(50, 50, 50), Text = "Reset",
+            TextColor3 = Color3.fromRGB(255, 255, 255), Font = Enum.Font.GothamBold,
+            TextSize = 12, AutoButtonColor = false, Parent = Popup
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
+
+        ResetBtn.MouseEnter:Connect(function() Tween(ResetBtn, 0.2, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}) end)
+        ResetBtn.MouseLeave:Connect(function() Tween(ResetBtn, 0.2, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}) end)
+
+        local function updatePreview()
+            local newColor = Color3.fromHSV(h, s, v)
+            currentColor = newColor
+            ColorBox.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+            PreviewBtn.BackgroundColor3 = newColor
+            BigPreview.BackgroundColor3 = newColor
+            Crosshair.Position = UDim2.new(s, 0, 1 - v, 0)
+            HueKnob.Position = UDim2.new(h, 0, 0.5, 0)
+            RGBDisplay.Text = string.format("RGB: %d, %d, %d", math.floor(newColor.R * 255), math.floor(newColor.G * 255), math.floor(newColor.B * 255))
+            if not noTheme then Library:UpdateTheme(newColor) end
+            if callback then callback(newColor) end
+        end
+
+        local draggingBox = false
+        local function updateFromBox(input)
+            local relX = math.clamp((input.Position.X - ColorBox.AbsolutePosition.X) / ColorBox.AbsoluteSize.X, 0, 1)
+            local relY = math.clamp((input.Position.Y - ColorBox.AbsolutePosition.Y) / ColorBox.AbsoluteSize.Y, 0, 1)
+            s = relX; v = 1 - relY
+            updatePreview()
+        end
+
+        ColorBox.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingBox = true; updateFromBox(input) end
+        end)
+
+        local draggingHue = false
+        local function updateFromHue(input)
+            local relX = math.clamp((input.Position.X - HueSlider.AbsolutePosition.X) / HueSlider.AbsoluteSize.X, 0, 1)
+            h = relX
+            updatePreview()
+        end
+
+        HueSlider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingHue = true; updateFromHue(input) end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                if draggingBox then updateFromBox(input) end
+                if draggingHue then updateFromHue(input) end
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingBox = false; draggingHue = false end
+        end)
+
+        local outsideConn = nil
+        local function closePopup()
+            Popup.Visible = false
+            if outsideConn then outsideConn:Disconnect(); outsideConn = nil end
+        end
+
+        PreviewBtn.MouseButton1Click:Connect(function()
+            if Popup.Visible then closePopup(); return end
+            local btnPos = PreviewBtn.AbsolutePosition
+            local popupX = btnPos.X - 200
+            local popupY = btnPos.Y + 25
+            local viewport = workspace.CurrentCamera.ViewportSize
+            if popupX < 5 then popupX = 5 end
+            if popupX + 240 > viewport.X - 5 then popupX = viewport.X - 245 end
+            if popupY + 310 > viewport.Y - 5 then popupY = btnPos.Y - 320 end
+            Popup.Position = UDim2.new(0, popupX, 0, popupY)
+            Popup.Visible = true
+            outsideConn = UserInputService.InputBegan:Connect(function(input, gpe)
+                if gpe then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                local pos = input.Position
+                local pPos = Popup.AbsolutePosition
+                local pSize = Popup.AbsoluteSize
+                local inPopup = pos.X >= pPos.X and pos.X <= pPos.X + pSize.X and pos.Y >= pPos.Y and pos.Y <= pPos.Y + pSize.Y
+                if not inPopup then closePopup() end
+            end)
+        end)
+
+        ResetBtn.MouseButton1Down:Connect(function()
+            local oh, os, ov = Color3.toHSV(ORIGINAL_COLOR)
+            h, s, v = oh, os, ov
+            updatePreview()
+            closePopup()
+        end)
+
+        AddToSearch(PickerFrame, text)
+        return PickerFrame
+    end
+
+    local function CreateGroupbox(parent, title)
+        local Groupbox = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Theme.GroupboxBG, BorderSizePixel = 0, Parent = parent
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+            Create("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}),
+            Create("UIPadding", {PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
+                PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)})
+        })
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = title,
+            TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Groupbox
+        })
+
+        Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Theme.Separator,
+            BorderSizePixel = 0, Parent = Groupbox
+        })
+
+        local Content = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1, Parent = Groupbox
+        }, {Create("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder})})
+
+        local GroupboxObject = {}
+        function GroupboxObject:AddToggle(text, default, callback, keybind)
+            CreateToggle(Content, text, default, callback, keybind)
+        end
+        function GroupboxObject:AddSlider(text, min, max, default, callback) CreateSlider(Content, text, min, max, default, callback) end
+        function GroupboxObject:AddCheckbox(text, default, callback) CreateCheckbox(Content, text, default, callback) end
+        function GroupboxObject:AddKeybind(text, default, callback) CreateKeybind(Content, text, default, callback) end
+        function GroupboxObject:AddButton(text, callback) CreateButton(Content, text, callback) end
+        function GroupboxObject:AddRedButton(text, callback) CreateRedButton(Content, text, callback) end
+        function GroupboxObject:AddColorPicker(text, defaultColor, callback, noTheme) CreateColorPicker(Content, text, defaultColor, callback, noTheme) end
+
+        return GroupboxObject
+    end
+
+    function TabObject:CreateSection(text)
+        local Section = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 25), BackgroundTransparency = 1, Parent = Tab.Page
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = text,
+            TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Section
+        })
+        return Section
+    end
+
+    function TabObject:CreateSearchBar(placeholder)
+        placeholder = placeholder or "Pesquisar"
+        local SearchFrame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.SearchBG,
+            BorderSizePixel = 0, Parent = Tab.Page
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+            Create("UIStroke", {Color = Color3.fromRGB(45, 45, 45), Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+        })
+
+        Create("TextLabel", {
+            Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(0, 8, 0.5, -13),
+            BackgroundTransparency = 1, Text = "🔍", TextColor3 = Color3.fromRGB(150, 150, 150),
+            Font = Enum.Font.Gotham, TextSize = 15,
+            TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+            Parent = SearchFrame
+        })
+
+        local SearchBox = Create("TextBox", {
+            Size = UDim2.new(1, -45, 1, 0), Position = UDim2.new(0, 38, 0, 0),
+            BackgroundTransparency = 1, Text = "", PlaceholderText = placeholder,
+            PlaceholderColor3 = Color3.fromRGB(120, 120, 120), TextColor3 = Color3.fromRGB(255, 255, 255),
+            Font = Enum.Font.Gotham, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+            ClearTextOnFocus = false, Parent = SearchFrame
+        })
+
+        SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+            local query = string.lower(SearchBox.Text)
+            for _, element in pairs(Tab.Elements) do
+                if element.Frame and element.Frame.Parent then
+                    local searchText = string.lower(element.SearchText or "")
+                    if query == "" or string.find(searchText, query, 1, true) then
+                        element.Frame.Visible = true
+                    else
+                        element.Frame.Visible = false
+                    end
+                end
+            end
+        end)
+
+        return SearchFrame
+    end
+
+    function TabObject:CreateToggle(text, default, callback, keybind) CreateToggle(Tab.Page, text, default, callback, keybind) end
+    function TabObject:CreateSlider(text, min, max, default, callback) CreateSlider(Tab.Page, text, min, max, default, callback) end
+    function TabObject:CreateCheckbox(text, default, callback) CreateCheckbox(Tab.Page, text, default, callback) end
+    function TabObject:CreateKeybind(text, default, callback) CreateKeybind(Tab.Page, text, default, callback) end
+    function TabObject:CreateButton(text, callback) CreateButton(Tab.Page, text, callback) end
+    function TabObject:CreateRedButton(text, callback) CreateRedButton(Tab.Page, text, callback) end
+    function TabObject:CreateColorPicker(text, defaultColor, callback, noTheme) CreateColorPicker(Tab.Page, text, defaultColor, callback, noTheme) end
+
+    local function ensureTwoColumn()
+        if not Tab.TwoColumnContainer then
+            Tab.TwoColumnContainer = Create("Frame", {
+                Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+                BackgroundTransparency = 1, Parent = Tab.Page
+            })
+            Tab.LeftColumn = Create("Frame", {
+                Size = UDim2.new(0.5, -5, 0, 0), Position = UDim2.new(0, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+                Parent = Tab.TwoColumnContainer
+            }, {Create("UIListLayout", {Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder})})
+            Tab.RightColumn = Create("Frame", {
+                Size = UDim2.new(0.5, -5, 0, 0), Position = UDim2.new(0.5, 5, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+                Parent = Tab.TwoColumnContainer
+            }, {Create("UIListLayout", {Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder})})
+        end
+    end
+
+    function TabObject:AddLeftGroupbox(title)
+        ensureTwoColumn()
+        return CreateGroupbox(Tab.LeftColumn, title)
+    end
+
+    function TabObject:AddRightGroupbox(title)
+        ensureTwoColumn()
+        return CreateGroupbox(Tab.RightColumn, title)
+    end
+
+    function TabObject:CreateLogContainer()
+        local LogContainer = Create("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 0, 300), BackgroundColor3 = Theme.ElementBG,
+            BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Accent,
+            CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            ScrollingDirection = Enum.ScrollingDirection.Y,
+            ElasticBehavior = Enum.ElasticBehavior.Never, Parent = Tab.Page
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+            Create("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}),
+            Create("UIPadding", {PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 12),
+                PaddingRight = UDim.new(0, 12), PaddingBottom = UDim.new(0, 10)})
+        })
+
+        function TabObject:AddLog(message)
+            local color = Theme.Text
+            local prefix = string.sub(message, 1, 3)
+            if prefix == "[+]" then color = Theme.LogAdd
+            elseif prefix == "[-]" then color = Theme.LogRemove
+            elseif prefix == "[=]" then color = Theme.LogFix end
+
+            local LogLabel = Create("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
+                Text = message, TextColor3 = color, Font = Enum.Font.Code, TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+                Parent = LogContainer
+            })
+            LogLabel.TextTransparency = 1
+            Tween(LogLabel, 0.3, {TextTransparency = 0})
+            return LogLabel
+        end
+        return LogContainer
+    end
+
+    function TabObject:CreateWelcomeBanner()
+        local Banner = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 90), BackgroundColor3 = Theme.TabsBG,
+            BorderSizePixel = 0, Parent = Tab.Page
+        }, {
+            Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+            Create("UIStroke", {Color = Theme.Accent, Thickness = 1, Transparency = 0.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 15, 0, 15),
+            BackgroundTransparency = 1, Text = "Bem-vindo, " .. LocalPlayer.DisplayName .. "!",
+            TextColor3 = Theme.Text, Font = Enum.Font.GothamBold, TextSize = 18,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Banner
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 15, 0, 45),
+            BackgroundTransparency = 1, Text = "xP Hub  •  Ultimate Battlegrounds",
+            TextColor3 = Theme.TextDim, Font = Enum.Font.Gotham, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Banner
+        })
+        return Banner
+    end
+
+    function TabObject:CreateInfoCard(title, value)
+        local Card = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = Theme.ElementBG,
+            Parent = Tab.Page
+        }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
+
+        Create("TextLabel", {
+            Size = UDim2.new(0.5, -15, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+            BackgroundTransparency = 1, Text = title, TextColor3 = Theme.TextDim,
+            Font = Enum.Font.Gotham, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Card
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(0.5, -15, 1, 0), Position = UDim2.new(0.5, 0, 0, 0),
+            BackgroundTransparency = 1, Text = value, TextColor3 = Theme.Accent,
+            Font = Enum.Font.GothamBold, TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Right, Parent = Card
+        })
+        return Card
+    end
+
+    return TabObject
+end
+
+-- Handler global de keybinds de toggle
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+    if ConsumedInputs[input] then
+        ConsumedInputs[input] = nil
+        return
+    end
+
+    for _, kb in pairs(ToggleKeybinds) do
+        if kb.GetKey() and input.KeyCode == kb.GetKey() then
+            local newState = not kb.State()
+            kb.SetState(newState)
+            Tween(kb.ToggleBtn, 0.2, {BackgroundColor3 = newState and Theme.ToggleOn or Theme.ToggleOff})
+            Tween(kb.Circle, 0.2, {Position = newState and UDim2.new(1, -16, 0, 2) or UDim2.new(0, 2, 0, 2)})
+            if not kb.NoNotify then NotifyToggle(kb.Text, newState) end
+            if kb.Callback then kb.Callback(newState) end
+        end
+    end
+end)
 
 -- ============================================================
--- FUNÇÕES PRINCIPAIS
+-- xP HUB - MAIN LOGIC
 -- ============================================================
-local function sendNotification(title, text)
-    game.StarterGui:SetCore("SendNotification", { Title = title, Text = text, Duration = 2 })
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LP = Players.LocalPlayer
+
+local Features = {
+    KillAura = { enabled = false, showRange = false,
+        config = { IgnoreFriends = true, MaxDistance = 100 } },
+    TPWalk = { enabled = false, config = { Speed = 1.5 } },
+    NoCooldown = { enabled = false },
+    NoStun = { enabled = false },
+    InfiniteUltimate = { enabled = false },
+    NoSlowdowns = { enabled = false },
+    NoJumpFatigue = { enabled = false },
+    MultiUseCutscenes = { enabled = false },
+    Endless = { enabled = false },
+    DisableCombatTimer = { enabled = false },
+    XRay = { enabled = false, config = { transparency = 0.5 } },
+    Invisible = { enabled = false },
+    DashSpeed = 100,
+    MeleeSpeed = 100,
+}
+
+local killAuraConn, tpwalkConn, xrayConnection = nil, nil, nil
+local originalCooldowns = {}
+
+local function notify(title, text, dur)
+    pcall(function() Library:Notify(title, text or "", dur or 3) end)
+end
+
+-- BYPASS SEGURO (ativo por padrão - sem UI)
+local Bypass = {
+    AntiKick = true,
+    AntiAC = true,
+    hookInstalled = false,
+    originalNamecall = nil,
+    antiAFKConn = nil,
+}
+
+local function safeCall(fn, ...)
+    local ok, result = pcall(fn, ...)
+    if ok then return result end
+    return nil
+end
+
+local function installKickHook()
+    if Bypass.hookInstalled then return true end
+    if not game:IsLoaded() then return false end
+
+    local ok = safeCall(function()
+        local mt = getrawmetatable(game)
+        if not mt then return false end
+        local oldNC = mt.__namecall
+        if Bypass.originalNamecall == nil then
+            Bypass.originalNamecall = oldNC
+        end
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method
+            pcall(function() method = getnamecallmethod() end)
+            if method == "Kick" and (Bypass.AntiKick or Bypass.AntiAC) then
+                local isSelf = false
+                pcall(function() isSelf = (self == LP) end)
+                if isSelf then return nil end
+            end
+            return Bypass.originalNamecall(self, ...)
+        end)
+        setreadonly(mt, true)
+        return true
+    end)
+
+    if ok == true then
+        Bypass.hookInstalled = true
+        return true
+    end
+    return false
+end
+
+local function installAntiAFK()
+    if Bypass.antiAFKConn then return end
+    safeCall(function()
+        Bypass.antiAFKConn = LP.Idled:Connect(function()
+            safeCall(function()
+                local vu = game:GetService("VirtualUser")
+                vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            end)
+        end)
+    end)
+end
+
+local function installAntiAC()
+    if not Bypass.AntiAC then return end
+    safeCall(function() LP.Kick = function() end end)
+    installAntiAFK()
+    installKickHook()
+end
+
+-- GAME SETTINGS
+local function saveOriginal(valueObj)
+    if valueObj and originalCooldowns[valueObj] == nil then
+        originalCooldowns[valueObj] = valueObj.Value
+    end
+end
+
+local function setValue(parent, name, value, saveOrig)
+    if not parent then return end
+    local v = parent:FindFirstChild(name)
+    if not v then return end
+    if saveOrig then saveOriginal(v) end
+    v.Value = value
 end
 
 local function updateGameSettings()
     local settings = ReplicatedStorage:FindFirstChild("Settings")
     if not settings then return end
+    local cooldowns = settings:FindFirstChild("Cooldowns")
+    local multipliers = settings:FindFirstChild("Multipliers")
+    local toggles = settings:FindFirstChild("Toggles")
 
     if Features.NoCooldown.enabled then
-        local cooldowns = settings:FindFirstChild("Cooldowns")
         if cooldowns then
             for _, cd in pairs(cooldowns:GetChildren()) do
-                if cd:IsA("NumberValue") then cd.Value = 0 end
+                if cd:IsA("NumberValue") then saveOriginal(cd); cd.Value = 0 end
             end
         end
-        local multipliers = settings:FindFirstChild("Multipliers")
-        if multipliers and multipliers:FindFirstChild("MeleeSpeed") then
-            multipliers.MeleeSpeed.Value = 1000
-        end
     else
-        local cooldowns = settings:FindFirstChild("Cooldowns")
         if cooldowns then
-            if cooldowns:FindFirstChild("Dash") then cooldowns.Dash.Value = 100 end
-            if cooldowns:FindFirstChild("Evasive") then cooldowns.Evasive.Value = 100 end
-            if cooldowns:FindFirstChild("WallCombo") then cooldowns.WallCombo.Value = 0 end
-            if cooldowns:FindFirstChild("Melee") then cooldowns.Melee.Value = 100 end
-        end
-        local multipliers = settings:FindFirstChild("Multipliers")
-        if multipliers and multipliers:FindFirstChild("MeleeSpeed") then
-            multipliers.MeleeSpeed.Value = 100
+            for _, cd in pairs(cooldowns:GetChildren()) do
+                if cd:IsA("NumberValue") and originalCooldowns[cd] ~= nil then
+                    cd.Value = originalCooldowns[cd]
+                end
+            end
         end
     end
 
-    local toggles = settings:FindFirstChild("Toggles")
-    if toggles then
-        if Features.NoStun.enabled then
-            if toggles:FindFirstChild("DisableHitStun") then toggles.DisableHitStun.Value = true end
-            if toggles:FindFirstChild("NoStunOnMiss") then toggles.NoStunOnMiss.Value = true end
-        else
-            if toggles:FindFirstChild("DisableHitStun") then toggles.DisableHitStun.Value = false end
-            if toggles:FindFirstChild("NoStunOnMiss") then toggles.NoStunOnMiss.Value = false end
-        end
-    end
-
-    local multipliers = settings:FindFirstChild("Multipliers")
     if multipliers then
+        setValue(multipliers, "MeleeSpeed", Features.MeleeSpeed, true)
+        setValue(multipliers, "DashSpeed", Features.DashSpeed, true)
         if Features.InfiniteUltimate.enabled then
-            if multipliers:FindFirstChild("UltimateTimer") then multipliers.UltimateTimer.Value = 1e9 end
-            if multipliers:FindFirstChild("UltimateDamage") then multipliers.UltimateDamage.Value = 1e9 end
-            if toggles and toggles:FindFirstChild("InstantTransformation") then toggles.InstantTransformation.Value = true end
+            setValue(multipliers, "UltimateTimer", 1e9, true)
+            setValue(multipliers, "UltimateDamage", 1e9, true)
         else
-            if multipliers:FindFirstChild("UltimateTimer") then multipliers.UltimateTimer.Value = 100 end
-            if multipliers:FindFirstChild("UltimateDamage") then multipliers.UltimateDamage.Value = 100 end
-            if toggles and toggles:FindFirstChild("InstantTransformation") then toggles.InstantTransformation.Value = false end
+            local ut = multipliers:FindFirstChild("UltimateTimer")
+            local ud = multipliers:FindFirstChild("UltimateDamage")
+            if ut and originalCooldowns[ut] ~= nil then ut.Value = originalCooldowns[ut] end
+            if ud and originalCooldowns[ud] ~= nil then ud.Value = originalCooldowns[ud] end
         end
+    end
+
+    if toggles then
+        setValue(toggles, "DisableHitStun", Features.NoStun.enabled, false)
+        setValue(toggles, "NoStunOnMiss", Features.NoStun.enabled, false)
+        setValue(toggles, "InstantTransformation", Features.InfiniteUltimate.enabled, false)
+        setValue(toggles, "NoSlowdowns", Features.NoSlowdowns.enabled, false)
+        setValue(toggles, "NoJumpFatigue", Features.NoJumpFatigue.enabled, false)
+        setValue(toggles, "MultiUseCutscenes", Features.MultiUseCutscenes.enabled, false)
+        setValue(toggles, "Endless", Features.Endless.enabled, false)
+        setValue(toggles, "DisableCombatTimer", Features.DisableCombatTimer.enabled, false)
     end
 end
 
-local function getCurrentCharacter()
-    local data = LocalPlayer:FindFirstChild("Data")
-    if data and data:FindFirstChild("Character") then return data.Character.Value end
+-- INVISIBLE
+local Invisible = { remote = nil, hooked = false, originalCF = nil }
+
+local function hookReplicationRemote(remote)
+    if Invisible.hooked then return end
+    Invisible.hooked = true
+    Invisible.remote = remote
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        if getnamecallmethod() == "FireServer" and self == Invisible.remote and getgenv().InvisibleBlock then
+            return nil
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end
+
+local function setInvisible(enable)
+    Features.Invisible.enabled = enable
+    if enable then
+        local char = LP.Character
+        if not char then notify("Invisible", "Sem personagem!"); Features.Invisible.enabled = false; return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then Features.Invisible.enabled = false; return end
+        local Remote = ReplicatedStorage:FindFirstChild("Remotes")
+            and ReplicatedStorage.Remotes:FindFirstChild("Replication")
+            and ReplicatedStorage.Remotes.Replication:FindFirstChild("FullCustomReplicationUnreliable")
+        if not Remote then notify("Invisible", "Remote não encontrado!"); Features.Invisible.enabled = false; return end
+        hookReplicationRemote(Remote)
+        Invisible.originalCF = hrp.CFrame
+        local flyingCF = Invisible.originalCF + Vector3.new(0, 50000, 0)
+        task.spawn(function()
+            for i = 1, 10 do
+                if hrp and hrp.Parent then hrp.CFrame = flyingCF end
+                pcall(function() Remote:FireServer() end)
+                task.wait(0.1)
+            end
+            getgenv().InvisibleBlock = true
+            if hrp and hrp.Parent and Invisible.originalCF then hrp.CFrame = Invisible.originalCF end
+            notify("Invisible", "Ativado!")
+        end)
+    else
+        getgenv().InvisibleBlock = false
+        notify("Invisible", "Desativado!")
+    end
+end
+
+-- HITBOX EXPANDER
+local HitboxState = { x = 0, y = 0, z = 0, active = false, installed = false, showCircle = false }
+local DEFAULT_HITBOX = Vector3.new(5, 4, 5)
+local HitboxHooked = false
+local OriginalBox = nil
+local CachedCore = nil
+local OurHookFn = nil
+local CircleBox = { part = nil }
+
+local function getOrCreateCirclePart()
+    if CircleBox.part and CircleBox.part.Parent then return CircleBox.part end
+    local existing = workspace:FindFirstChild("HitboxVisualizer_xPHub")
+    if existing then existing:Destroy() end
+    local part = Instance.new("Part")
+    part.Name = "HitboxVisualizer_xPHub"
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.Transparency = 0.75
+    part.Material = Enum.Material.ForceField
+    part.Color = Color3.fromRGB(0, 255, 100)
+    part.CastShadow = false
+    part.Parent = workspace
+    CircleBox.part = part
+    return part
+end
+
+local function destroyCirclePart()
+    if CircleBox.part then
+        pcall(function() CircleBox.part:Destroy() end)
+        CircleBox.part = nil
+    end
+end
+
+local function updateCircleVisual()
+    if not HitboxState.showCircle then destroyCirclePart(); return end
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then destroyCirclePart(); return end
+    local part = getOrCreateCirclePart()
+    local sx, sy, sz
+    if not HitboxState.active then
+        sx, sy, sz = DEFAULT_HITBOX.X, DEFAULT_HITBOX.Y, DEFAULT_HITBOX.Z
+    else
+        sx = math.max(tonumber(HitboxState.x) or 0, 0)
+        sy = math.max(tonumber(HitboxState.y) or 0, 0)
+        sz = math.max(tonumber(HitboxState.z) or 0, 0)
+    end
+    local isActiveSize = (sx > 0 or sy > 0 or sz > 0)
+    local visX = sx > 0 and sx or 3
+    local visY = sy > 0 and sy or 3
+    local visZ = sz > 0 and sz or 3
+    part.Size = Vector3.new(visX, visY, visZ)
+    part.CFrame = hrp.CFrame
+    if isActiveSize and HitboxState.active then
+        part.Color = Color3.fromRGB(0, 255, 100)
+    elseif not HitboxState.active then
+        part.Color = Color3.fromRGB(150, 150, 255)
+    else
+        part.Color = Color3.fromRGB(255, 60, 60)
+    end
+end
+
+task.spawn(function()
+    while getgenv()._xPHub_ALIVE do
+        if HitboxState.showCircle then updateCircleVisual() end
+        task.wait(0.05)
+    end
+end)
+
+local function getCore()
+    if CachedCore then return CachedCore end
+    local ok, core = pcall(function() return require(ReplicatedStorage:WaitForChild("Core")) end)
+    if ok and core then CachedCore = core; return core end
     return nil
 end
 
-local function triggerDash()
-    if not Features.KillAura.enabled then return end
-    local cfg = Features.KillAura.config
-    if tick() - lastDash < cfg.DashInterval then return end
-    lastDash = tick()
+local function makeHook()
+    if OurHookFn then return OurHookFn end
+    OurHookFn = newcclosure(function(...)
+        local args = { ... }
+        local char = args[2]
+        local config = args[3]
+        if char == nil then return OriginalBox(unpack(args)) end
+        local sx, sy, sz
+        if not HitboxState.active then
+            sx, sy, sz = DEFAULT_HITBOX.X, DEFAULT_HITBOX.Y, DEFAULT_HITBOX.Z
+        else
+            sx = tonumber(HitboxState.x) or 0
+            sy = tonumber(HitboxState.y) or 0
+            sz = tonumber(HitboxState.z) or 0
+            if sx == 0 and sy == 0 and sz == 0 then return OriginalBox(unpack(args)) end
+        end
+        config = config or {}
+        local cur = config.Size or Vector3.new(1, 1, 1)
+        config.Size = Vector3.new(sx > 0 and sx or cur.X, sy > 0 and sy or cur.Y, sz > 0 and sz or cur.Z)
+        args[3] = config
+        return OriginalBox(unpack(args))
+    end)
+    return OurHookFn
+end
 
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local dashRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Character") and ReplicatedStorage.Remotes.Character:FindFirstChild("Dash")
-    if dashRemote then
-        pcall(function() dashRemote:FireServer(hrp.CFrame, "L", hrp.CFrame.LookVector, nil, tick()) end)
+local function ensureHook()
+    local Core = getCore()
+    if not Core then return false end
+    local combatHit = Core.Get and Core.Get("Combat", "Hit")
+    if not combatHit or not combatHit.Box then return false end
+    if combatHit.Box == OurHookFn then
+        HitboxHooked = true
+        HitboxState.installed = true
+        return true
     end
+    if not OriginalBox then OriginalBox = combatHit.Box end
+    pcall(function() combatHit.Box = makeHook() end)
+    HitboxHooked = (combatHit.Box == OurHookFn)
+    if HitboxHooked then HitboxState.installed = true end
+    return HitboxHooked
+end
+
+task.spawn(function()
+    while getgenv()._xPHub_ALIVE do
+        if HitboxState.installed then ensureHook() end
+        task.wait(0.5)
+    end
+end)
+
+-- KILL AURA RANGE RING
+local KillAuraRing = { folder = nil, segments = {}, conn = nil, SEGMENTS = 72 }
+
+local function destroyKillAuraRing()
+    if KillAuraRing.folder then pcall(function() KillAuraRing.folder:Destroy() end) end
+    KillAuraRing.folder = nil
+    KillAuraRing.segments = {}
+end
+
+local function createKillAuraRing()
+    local existing = workspace:FindFirstChild("KillAuraRing_xPHub")
+    if existing then existing:Destroy() end
+    local folder = Instance.new("Folder")
+    folder.Name = "KillAuraRing_xPHub"
+    folder.Parent = workspace
+    KillAuraRing.folder = folder
+    KillAuraRing.segments = {}
+    for i = 1, KillAuraRing.SEGMENTS do
+        local seg = Instance.new("Part")
+        seg.Name = "Segment_" .. i
+        seg.Shape = Enum.PartType.Block
+        seg.Anchored = true
+        seg.CanCollide = false
+        seg.CanQuery = false
+        seg.CanTouch = false
+        seg.CastShadow = false
+        seg.Material = Enum.Material.Neon
+        seg.TopSurface = Enum.SurfaceType.Smooth
+        seg.BottomSurface = Enum.SurfaceType.Smooth
+        seg.Color = Color3.fromRGB(30, 80, 190)
+        seg.Transparency = 0.55
+        seg.Parent = folder
+        KillAuraRing.segments[i] = seg
+    end
+end
+
+local function updateKillAuraRing()
+    if not Features.KillAura.showRange then
+        if KillAuraRing.folder then destroyKillAuraRing() end
+        return
+    end
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        if KillAuraRing.folder then destroyKillAuraRing() end
+        return
+    end
+    if not KillAuraRing.folder or not KillAuraRing.folder.Parent then createKillAuraRing() end
+    local radius = math.max(tonumber(Features.KillAura.config.MaxDistance) or 100, 5)
+    local arcAngle = (2 * math.pi) / KillAuraRing.SEGMENTS
+    local chordLength = 2 * radius * math.sin(arcAngle / 2)
+    local segLength = chordLength * 1.35
+    local thickness = math.max(radius * 0.02, 0.3)
+    local height = 0.1
+    local basePos = hrp.Position + Vector3.new(0, 1, 0)
+    local isOn = Features.KillAura.enabled
+    local color = isOn and Color3.fromRGB(10, 50, 180) or Color3.fromRGB(30, 80, 190)
+    local transparency = isOn and 0.35 or 0.55
+    for i = 1, KillAuraRing.SEGMENTS do
+        local seg = KillAuraRing.segments[i]
+        if seg and seg.Parent then
+            local a = (i - 1) * arcAngle
+            local x = math.cos(a) * radius
+            local z = math.sin(a) * radius
+            seg.Size = Vector3.new(segLength, height, thickness)
+            seg.CFrame = CFrame.new(basePos + Vector3.new(x, 0, z)) * CFrame.Angles(0, -(a + math.pi / 2), 0)
+            seg.Color = color
+            seg.Transparency = transparency
+        end
+    end
+end
+
+KillAuraRing.conn = RunService.RenderStepped:Connect(updateKillAuraRing)
+
+-- HELPERS
+local function getCurrentCharacter()
+    local data = LP:FindFirstChild("Data")
+    if data and data:FindFirstChild("Character") then return data.Character.Value end
+    return nil
 end
 
 local function sendKillAura()
     if not Features.KillAura.enabled then return end
     local cfg = Features.KillAura.config
-
-    local character = LocalPlayer.Character
+    local character = LP.Character
     if not character then return end
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-
-    triggerDash()
-
     local charName = getCurrentCharacter()
     if not charName then return end
-
-    local wallCombo = ReplicatedStorage:FindFirstChild("Characters") and ReplicatedStorage.Characters:FindFirstChild(charName) and ReplicatedStorage.Characters[charName]:FindFirstChild("WallCombo")
+    local wallCombo = ReplicatedStorage:FindFirstChild("Characters")
+        and ReplicatedStorage.Characters:FindFirstChild(charName)
+        and ReplicatedStorage.Characters[charName]:FindFirstChild("WallCombo")
     if not wallCombo then return end
-
-    local abilityRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Abilities") and ReplicatedStorage.Remotes.Abilities:FindFirstChild("Ability")
-    local combatRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Combat") and ReplicatedStorage.Remotes.Combat:FindFirstChild("Action")
+    local abilityRemote = ReplicatedStorage:FindFirstChild("Remotes")
+        and ReplicatedStorage.Remotes:FindFirstChild("Abilities")
+        and ReplicatedStorage.Remotes.Abilities:FindFirstChild("Ability")
+    local combatRemote = ReplicatedStorage:FindFirstChild("Remotes")
+        and ReplicatedStorage.Remotes:FindFirstChild("Combat")
+        and ReplicatedStorage.Remotes.Combat:FindFirstChild("Action")
     if not abilityRemote or not combatRemote then return end
 
+    local FIXED_DAMAGE = 1
+    local maxDist = tonumber(cfg.MaxDistance) or 100
+
     for _, targetPlayer in ipairs(Players:GetPlayers()) do
-        if targetPlayer == LocalPlayer then continue end
+        if targetPlayer == LP then continue end
         if not targetPlayer.Character then continue end
-
         local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not targetHRP then continue end
-
-        if cfg.IgnoreFriends and LocalPlayer:IsFriendsWith(targetPlayer.UserId) then continue end
-
         local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
-        if not targetHumanoid then continue end
-        if targetHumanoid.Health <= cfg.HealthLimit then continue end
-
-        if (hrp.Position - targetHRP.Position).Magnitude > cfg.MaxDistance then continue end
+        if not targetHRP or not targetHumanoid then continue end
+        if targetHumanoid.Health <= 0 then continue end
+        if cfg.IgnoreFriends and LP:IsFriendsWith(targetPlayer.UserId) then continue end
+        if (hrp.Position - targetHRP.Position).Magnitude > maxDist then continue end
 
         pcall(function()
-            abilityRemote:FireServer(wallCombo, cfg.Damage, {}, targetHRP.Position)
+            abilityRemote:FireServer(wallCombo, FIXED_DAMAGE, {}, targetHRP.Position)
         end)
 
         local combatArgs = {
-            wallCombo, charName .. ":WallCombo", 2, cfg.Damage,
+            wallCombo, charName .. ":WallCombo", 2, FIXED_DAMAGE,
             {
                 HitboxCFrames = { targetHRP.CFrame, targetHRP.CFrame },
                 BestHitCharacter = targetPlayer.Character,
@@ -179,9 +1570,11 @@ local function sendKillAura()
                     ActionNumber1 = {
                         [targetPlayer.Name] = {
                             StartCFrameStr = tostring(hrp.CFrame),
-                            Local = true, Collision = false, Animation = "Punch1Hit",
-                            Preset = "Punch", Velocity = Vector3.zero,
-                            FromPosition = targetHRP.Position, Seed = math.random(1, 999999)
+                            Local = true, Collision = false,
+                            Animation = "Punch1Hit", Preset = "Punch",
+                            Velocity = Vector3.zero,
+                            FromPosition = targetHRP.Position,
+                            Seed = math.random(1, 999999)
                         }
                     }
                 },
@@ -195,37 +1588,35 @@ end
 
 local function tpwalkUpdate()
     if not Features.TPWalk.enabled then return end
-
-    local char = LocalPlayer.Character
+    local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local humanoid = char:FindFirstChild("Humanoid")
     if not hrp or not humanoid then return end
-
-    local moveDir = humanoid.MoveDirection
-    if moveDir.Magnitude > 0 then
-        hrp.CFrame = hrp.CFrame + (moveDir * Features.TPWalk.config.Speed)
+    if humanoid.MoveDirection.Magnitude > 0 then
+        hrp.CFrame = hrp.CFrame + (humanoid.MoveDirection * Features.TPWalk.config.Speed)
     end
 end
 
+-- X-RAY
+local function isCharacterPart(v)
+    local char = LP.Character
+    if not char then return false end
+    return v:IsDescendantOf(char)
+end
+
 local function applyXRay()
-    local transparency = Features.XRay.enabled and Features.XRay.config.transparency or 0
+    local t = Features.XRay.enabled and Features.XRay.config.transparency or 0
     for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            local char = LocalPlayer.Character
-            local isCharacterPart = char and (v:IsDescendantOf(char) or (v.Parent and v.Parent:IsDescendantOf(char)))
-            if not isCharacterPart then
-                v.LocalTransparencyModifier = transparency
-            end
+        if v:IsA("BasePart") and not isCharacterPart(v) then
+            v.LocalTransparencyModifier = t
         end
     end
 end
 
 local function onNewPart(part)
     if not part:IsA("BasePart") then return end
-    local char = LocalPlayer.Character
-    local isCharacterPart = char and (part:IsDescendantOf(char) or (part.Parent and part.Parent:IsDescendantOf(char)))
-    if not isCharacterPart then
+    if not isCharacterPart(part) then
         part.LocalTransparencyModifier = Features.XRay.enabled and Features.XRay.config.transparency or 0
     end
 end
@@ -239,340 +1630,341 @@ end
 local function stopXRay()
     if xrayConnection then xrayConnection:Disconnect(); xrayConnection = nil end
     for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            local char = LocalPlayer.Character
-            local isCharacterPart = char and (v:IsDescendantOf(char) or (v.Parent and v.Parent:IsDescendantOf(char)))
-            if not isCharacterPart then
-                v.LocalTransparencyModifier = 0
+        if v:IsA("BasePart") and not isCharacterPart(v) then
+            v.LocalTransparencyModifier = 0
+        end
+    end
+end
+
+-- SPAWN PLATFORM
+local function spawnGrayPlatform()
+    local p1, p2 = Vector3.new(33, -9, 824), Vector3.new(1100, -9, -460)
+    local cx, cz = (p1.X + p2.X) / 2, (p1.Z + p2.Z) / 2
+    local sx, sz = math.abs(p2.X - p1.X), math.abs(p2.Z - p1.Z)
+    local old = workspace:FindFirstChild("SpawnPlacePlatform")
+    if old then old:Destroy() end
+    local part = Instance.new("Part")
+    part.Name = "SpawnPlacePlatform"
+    part.Size = Vector3.new(sx, 1, sz)
+    part.CFrame = CFrame.new(cx, p1.Y, cz)
+    part.Anchored = true
+    part.BrickColor = BrickColor.new("Medium stone grey")
+    part.Material = Enum.Material.SmoothPlastic
+    part.Parent = workspace
+    notify("Spawn Place", "Plataforma criada!")
+end
+
+-- ============================================================
+-- UI CONSTRUCTION
+-- ============================================================
+local Window = Library:CreateWindow("xP Hub", "Ultimate Battlegrounds", 96698707545893)
+
+local HomeTab = Window:CreateTab("Home", "🏠")
+local CombatTab = Window:CreateTab("Combat", "⚔️")
+local RageTab = Window:CreateTab("Rage", "🎯")
+local VisualTab = Window:CreateTab("Visual", "👁️")
+local MoveTab = Window:CreateTab("Movement", "🚶")
+local LogsTab = Window:CreateTab("Logs", "📋")
+local ConfigTab = Window:CreateTab("Config", "⚙️")
+
+-- HOME
+HomeTab:CreateWelcomeBanner()
+HomeTab:CreateSection("Informações")
+HomeTab:CreateInfoCard("Player", LP.DisplayName .. " (@" .. LP.Name .. ")")
+HomeTab:CreateInfoCard("Versão", "v22")
+HomeTab:CreateInfoCard("UI", "xP UI")
+HomeTab:CreateSection("Atalhos Rápidos")
+HomeTab:CreateButton("⚔️  Ir para Combat", function() Window:SelectTab("Combat") end)
+HomeTab:CreateButton("🎯  Ir para Rage", function() Window:SelectTab("Rage") end)
+HomeTab:CreateButton("👁️  Ir para Visual", function() Window:SelectTab("Visual") end)
+HomeTab:CreateButton("🚶  Ir para Movement", function() Window:SelectTab("Movement") end)
+HomeTab:CreateButton("⚙️  Ir para Config", function() Window:SelectTab("Config") end)
+
+-- COMBAT
+local kaLeft = CombatTab:AddLeftGroupbox("Kill Aura")
+kaLeft:AddToggle("Kill Aura", false, function(v)
+    Features.KillAura.enabled = v
+    if v then
+        if not killAuraConn then killAuraConn = RunService.Heartbeat:Connect(sendKillAura) end
+    else
+        if killAuraConn then killAuraConn:Disconnect(); killAuraConn = nil end
+    end
+end, Enum.KeyCode.Unknown)
+
+kaLeft:AddSlider("Kill Aura Distance", 10, 300, 100, function(v)
+    Features.KillAura.config.MaxDistance = v
+end)
+
+kaLeft:AddToggle("Show Range", false, function(v)
+    Features.KillAura.showRange = v
+    if not v then destroyKillAuraRing() end
+end)
+
+kaLeft:AddToggle("Ignorar Amigos", true, function(v)
+    Features.KillAura.config.IgnoreFriends = v
+end)
+
+local multLeft = CombatTab:AddLeftGroupbox("Multipliers")
+multLeft:AddSlider("Melee Speed", 1, 300, 100, function(v)
+    Features.MeleeSpeed = v
+    updateGameSettings()
+end)
+multLeft:AddSlider("Dash Speed", 1, 300, 100, function(v)
+    Features.DashSpeed = v
+    updateGameSettings()
+end)
+
+local vantagensRight = CombatTab:AddRightGroupbox("Vantagens")
+vantagensRight:AddToggle("Sem Cooldown", false, function(v)
+    Features.NoCooldown.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Sem Stun", false, function(v)
+    Features.NoStun.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Ultimate Infinita", false, function(v)
+    Features.InfiniteUltimate.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Sem Slowdown", false, function(v)
+    Features.NoSlowdowns.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Sem Fadiga de Pulo", false, function(v)
+    Features.NoJumpFatigue.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Multi-Use Cutscenes", false, function(v)
+    Features.MultiUseCutscenes.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Endless", false, function(v)
+    Features.Endless.enabled = v; updateGameSettings()
+end)
+vantagensRight:AddToggle("Sem Combat Timer", false, function(v)
+    Features.DisableCombatTimer.enabled = v; updateGameSettings()
+end)
+
+-- RAGE
+local rageLeft = RageTab:AddLeftGroupbox("Hitbox Expander")
+rageLeft:AddToggle("Hitbox Extender", false, function(v)
+    if v then
+        if ensureHook() then
+            HitboxState.active = true
+            updateCircleVisual()
+            notify("Hitbox Extender", "Ativado! " .. HitboxState.x .. "/" .. HitboxState.y .. "/" .. HitboxState.z)
+        else
+            notify("Hitbox Extender", "Falha ao aplicar!")
+        end
+    else
+        HitboxState.active = false
+        ensureHook()
+        updateCircleVisual()
+        notify("Hitbox Extender", "Desativado! Padrão 5/4/5.")
+    end
+end)
+
+rageLeft:AddToggle("Hitbox Preview", false, function(v)
+    HitboxState.showCircle = v
+    if v then updateCircleVisual() else destroyCirclePart() end
+end)
+
+local rageRight = RageTab:AddRightGroupbox("Tamanho do Hitbox")
+rageRight:AddSlider("Hitbox X", 0, 100, 0, function(v) HitboxState.x = v; updateCircleVisual() end)
+rageRight:AddSlider("Hitbox Y", 0, 100, 0, function(v) HitboxState.y = v; updateCircleVisual() end)
+rageRight:AddSlider("Hitbox Z", 0, 100, 0, function(v) HitboxState.z = v; updateCircleVisual() end)
+
+-- VISUAL
+local xrayLeft = VisualTab:AddLeftGroupbox("X-Ray")
+xrayLeft:AddToggle("X-Ray", false, function(v)
+    Features.XRay.enabled = v
+    if v then startXRay() else stopXRay() end
+end, Enum.KeyCode.Unknown)
+
+xrayLeft:AddSlider("Transparência", 0.1, 0.9, 0.5, function(v)
+    Features.XRay.config.transparency = v
+    if Features.XRay.enabled then applyXRay() end
+end)
+
+local stealthRight = VisualTab:AddRightGroupbox("Stealth")
+stealthRight:AddToggle("Invisible", false, function(v)
+    if v ~= Features.Invisible.enabled then setInvisible(v) end
+end, Enum.KeyCode.Unknown)
+
+local miscRight = VisualTab:AddRightGroupbox("Mundo")
+miscRight:AddButton("Spawn Place (Plataforma)", spawnGrayPlatform)
+
+-- MOVEMENT (sem groupbox)
+MoveTab:CreateToggle("TPWalk (Atravessar)", false, function(v)
+    Features.TPWalk.enabled = v
+    if v then
+        if not tpwalkConn then tpwalkConn = RunService.Heartbeat:Connect(tpwalkUpdate) end
+    else
+        if tpwalkConn then tpwalkConn:Disconnect(); tpwalkConn = nil end
+    end
+end, Enum.KeyCode.Unknown)
+
+MoveTab:CreateSlider("Velocidade", 0.5, 5, 1.5, function(v) Features.TPWalk.config.Speed = v end)
+
+-- LOGS
+LogsTab:CreateSection("Histórico")
+LogsTab:CreateLogContainer()
+LogsTab:AddLog("── LEGENDA ────────────────────")
+LogsTab:AddLog("[+] Nova função adicionada")
+LogsTab:AddLog("[=] Bug corrigido")
+LogsTab:AddLog("[-] Função removida")
+LogsTab:AddLog("──────────────────────────────")
+LogsTab:AddLog("")
+LogsTab:AddLog("[+] Unload Script fecha tudo corretamente (loops, hooks, parts, UI)")
+LogsTab:AddLog("[+] Config sem groupbox (elementos diretos na tab)")
+LogsTab:AddLog("[+] Keybinds vêm sem tecla por padrão (clique pra definir)")
+LogsTab:AddLog("[+] Movement sem groupbox (elementos diretos na tab)")
+LogsTab:AddLog("[+] Nova tab: Rage (com Hitbox Expander)")
+LogsTab:AddLog("[+] Tab Bypass removida (proteções ativas por padrão)")
+LogsTab:AddLog("[+] Renomeado para xP Hub")
+LogsTab:AddLog("[+] Ícone original da xP UI")
+LogsTab:AddLog("[+] UI migrada para xP UI (nativa)")
+LogsTab:AddLog("[+] Toggle com keybind integrado")
+LogsTab:AddLog("[=] Corrigido texto do Toggle cortado no Groupbox")
+LogsTab:AddLog("[+] Tabs organizadas por categoria")
+
+-- ============================================================
+-- UNLOAD COMPLETO
+-- ============================================================
+local function unloadAll()
+    -- 1) Mata todos os loops/threads
+    getgenv()._xPHub_ALIVE = false
+
+    -- 2) Desliga todas as features e restaura settings
+    pcall(function()
+        for _, v in pairs(Features) do
+            if type(v) == "table" and v.enabled ~= nil then
+                v.enabled = false
             end
         end
-    end
+        Features.KillAura.showRange = false
+        Features.XRay.enabled = false
+        Features.Invisible.enabled = false
+        getgenv().InvisibleBlock = false
+        updateGameSettings()
+    end)
+
+    -- 3) Desconectar connections
+    pcall(function() if killAuraConn then killAuraConn:Disconnect(); killAuraConn = nil end end)
+    pcall(function() if tpwalkConn then tpwalkConn:Disconnect(); tpwalkConn = nil end end)
+    pcall(function() if xrayConnection then xrayConnection:Disconnect(); xrayConnection = nil end end)
+    pcall(function() if KillAuraRing.conn then KillAuraRing.conn:Disconnect(); KillAuraRing.conn = nil end end)
+    pcall(function() if Bypass.antiAFKConn then Bypass.antiAFKConn:Disconnect(); Bypass.antiAFKConn = nil end end)
+
+    -- 4) Restaurar X-Ray (transparência 0)
+    pcall(function()
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
+        end
+    end)
+
+    -- 5) Remover parts visuais criados pelo script
+    pcall(function()
+        local ring = workspace:FindFirstChild("KillAuraRing_xPHub")
+        if ring then ring:Destroy() end
+    end)
+    pcall(function()
+        local hb = workspace:FindFirstChild("HitboxVisualizer_xPHub")
+        if hb then hb:Destroy() end
+    end)
+    pcall(function()
+        local sp = workspace:FindFirstChild("SpawnPlacePlatform")
+        if sp then sp:Destroy() end
+    end)
+    pcall(function() destroyCirclePart() end)
+
+    -- 6) Restaurar Hitbox original (desfaz o hook)
+    pcall(function()
+        if OriginalBox then
+            local Core = getCore()
+            if Core then
+                local combatHit = Core.Get and Core.Get("Combat", "Hit")
+                if combatHit then combatHit.Box = OriginalBox end
+            end
+        end
+        HitboxState.installed = false
+        HitboxState.active = false
+    end)
+
+    -- 7) Restaurar hook do Kick (metatable) se aplicável
+    pcall(function()
+        if Bypass.hookInstalled and Bypass.originalNamecall then
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            mt.__namecall = Bypass.originalNamecall
+            setreadonly(mt, true)
+            Bypass.hookInstalled = false
+            Bypass.originalNamecall = nil
+        end
+    end)
+
+    -- 8) Restaurar Invisible remote hook
+    pcall(function()
+        Invisible.hooked = false
+        Invisible.remote = nil
+    end)
+
+    -- 9) Destruir a UI
+    pcall(function()
+        if Window and Window.ScreenGui then
+            Window.ScreenGui:Destroy()
+        end
+    end)
+
+    -- 10) Log final
+    pcall(function() print("[xP Hub] Script descarregado com sucesso.") end)
 end
 
-local function spawnGrayPlatform()
-    local ponto1 = Vector3.new(33, -9, 824)
-    local ponto2 = Vector3.new(1100, -9, -460)
-    local centroX = (ponto1.X + ponto2.X) / 2
-    local centroZ = (ponto1.Z + ponto2.Z) / 2
-    local tamanhoX = math.abs(ponto2.X - ponto1.X)
-    local tamanhoZ = math.abs(ponto2.Z - ponto1.Z)
-    local tamanhoY = 1
-
-    local oldPart = workspace:FindFirstChild("SpawnPlacePlatform")
-    if oldPart then oldPart:Destroy() end
-
-    local parte = Instance.new("Part")
-    parte.Name = "SpawnPlacePlatform"
-    parte.Size = Vector3.new(tamanhoX, tamanhoY, tamanhoZ)
-    parte.CFrame = CFrame.new(centroX, ponto1.Y, centroZ)
-    parte.Anchored = true
-    parte.BrickColor = BrickColor.new("Medium stone grey")
-    parte.Material = Enum.Material.SmoothPlastic
-    parte.Parent = workspace
-
-    sendNotification("Spawn Place", "Plataforma cinza criada no mapa!")
-end
-
 -- ============================================================
--- GERENCIADOR DE TOGGLES
+-- CONFIG (sem groupbox - elementos diretos na tab)
 -- ============================================================
-local function toggleFeature(featureName)
-    local feat = Features[featureName]
-    if not feat then return end
-    feat.enabled = not feat.enabled
+ConfigTab:CreateKeybind("Menu Keybind", Enum.KeyCode.LeftAlt, function(k) end)
 
-    -- Atualiza o toggle visual
-    local toggleObj = ToggleObjects[featureName]
-    if toggleObj then
-        toggleObj:SetValue(feat.enabled)
+ConfigTab:CreateSlider("Menu Scale (%)", 50, 150, 100, function(val)
+    Window.UIScale.Scale = val / 100
+end)
+
+ConfigTab:CreateSection("Notificações")
+ConfigTab:CreateCheckbox("Enable Notification", true, function(state)
+    NotificationsEnabled = state
+end)
+
+ConfigTab:CreateSection("Tema")
+ConfigTab:CreateColorPicker("Cor do Menu", Color3.fromRGB(8, 65, 135), function(color) end)
+
+ConfigTab:CreateSection("Unload")
+ConfigTab:CreateRedButton("Unload Script", function()
+    unloadAll()
+end)
+
+-- MENU KEYBIND
+local menuKey = Enum.KeyCode.LeftAlt
+local uiVisible = true
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == menuKey then
+        uiVisible = not uiVisible
+        Window.MainFrame.Visible = uiVisible
     end
-
-    -- Ativa/desativa a feature
-    if featureName == "NoCooldown" or featureName == "NoStun" or featureName == "InfiniteUltimate" then
-        updateGameSettings()
-    elseif featureName == "KillAura" then
-        if feat.enabled then
-            if not killAuraConn then killAuraConn = RunService.Heartbeat:Connect(sendKillAura) end
-        else
-            if killAuraConn then killAuraConn:Disconnect(); killAuraConn = nil end
-        end
-    elseif featureName == "TPWalk" then
-        if feat.enabled then
-            if not tpwalkConn then tpwalkConn = RunService.Heartbeat:Connect(tpwalkUpdate) end
-        else
-            if tpwalkConn then tpwalkConn:Disconnect(); tpwalkConn = nil end
-        end
-    elseif featureName == "XRay" then
-        if feat.enabled then startXRay() else stopXRay() end
-    end
-
-    sendNotification(featureName, feat.enabled and "Ativado" or "Desativado")
-end
+end)
 
 -- ============================================================
--- CRIAÇÃO DA INTERFACE OBSIDIAN
--- ============================================================
-Library.ForceCheckbox = false
-Library.ShowToggleFrameInKeybinds = true
-
-local Window = Library:CreateWindow({
-    Title = "xP Death Aura",
-    Footer = "Criado por evertonXpp",
-    Icon = 125209590669138,
-    NotifySide = "Right",
-    ShowCustomCursor = true,
-})
-
--- Tabs: Main e Config (ícone alterado para "cog")
-local Tabs = {
-    Main = Window:AddTab("Main", "sword"),
-    Config = Window:AddTab("Config", "cog"),
-}
-
--- ============================================================
--- TAB MAIN - Lado Esquerdo
--- ============================================================
-local mainLeft1 = Tabs.Main:AddLeftGroupbox("Kill Aura", "skull")
-
--- Toggle Kill Aura
-local killToggle = mainLeft1:AddToggle("KillAura", {
-    Text = "Kill Aura",
-    Tooltip = "Ativa o Kill Aura automático",
-    Default = false,
-    Callback = function(Value)
-        Features.KillAura.enabled = Value
-        if Value then
-            if not killAuraConn then killAuraConn = RunService.Heartbeat:Connect(sendKillAura) end
-        else
-            if killAuraConn then killAuraConn:Disconnect(); killAuraConn = nil end
-        end
-    end,
-})
-ToggleObjects.KillAura = killToggle
-
--- KeyPicker do Kill Aura (Label com KeyPicker)
-mainLeft1:AddLabel("Tecla Kill Aura"):AddKeyPicker("KillAuraKey", {
-    Default = Features.KillAura.key.Name,
-    Mode = "Press",
-    Text = "Kill Aura",
-    Callback = function()
-        toggleFeature("KillAura")
-    end,
-    ChangedCallback = function(NewKey, NewModifiers)
-        Features.KillAura.key = NewKey
-    end,
-})
-
--- Configurações do Kill Aura
-mainLeft1:AddSlider("KAMaxDistance", {
-    Text = "Distância Máxima",
-    Default = 100,
-    Min = 10,
-    Max = 300,
-    Rounding = 0,
-    Suffix = " studs",
-    Callback = function(Value)
-        Features.KillAura.config.MaxDistance = Value
-    end,
-})
-
-mainLeft1:AddSlider("KADamage", {
-    Text = "Dano",
-    Default = 1,
-    Min = 1,
-    Max = 100,
-    Rounding = 0,
-    Callback = function(Value)
-        Features.KillAura.config.Damage = Value
-    end,
-})
-
-mainLeft1:AddSlider("KAHealthLimit", {
-    Text = "Limite de Vida do Alvo",
-    Default = 0,
-    Min = 0,
-    Max = 100,
-    Rounding = 0,
-    Suffix = "%",
-    Callback = function(Value)
-        Features.KillAura.config.HealthLimit = Value
-    end,
-})
-
-mainLeft1:AddSlider("KADashInterval", {
-    Text = "Intervalo do Dash",
-    Default = 0.7,
-    Min = 0.1,
-    Max = 2,
-    Rounding = 1,
-    Suffix = "s",
-    Callback = function(Value)
-        Features.KillAura.config.DashInterval = Value
-    end,
-})
-
-mainLeft1:AddToggle("KAIgnoreFriends", {
-    Text = "Ignorar Amigos",
-    Default = true,
-    Callback = function(Value)
-        Features.KillAura.config.IgnoreFriends = Value
-    end,
-})
-
--- TPWalk
-local mainLeft2 = Tabs.Main:AddLeftGroupbox("TPWalk", "footprints")
-
-local tpToggle = mainLeft2:AddToggle("TPWalk", {
-    Text = "TPWalk (Atravessar)",
-    Default = false,
-    Callback = function(Value)
-        Features.TPWalk.enabled = Value
-        if Value then
-            if not tpwalkConn then tpwalkConn = RunService.Heartbeat:Connect(tpwalkUpdate) end
-        else
-            if tpwalkConn then tpwalkConn:Disconnect(); tpwalkConn = nil end
-        end
-    end,
-})
-ToggleObjects.TPWalk = tpToggle
-
-mainLeft2:AddLabel("Tecla TPWalk"):AddKeyPicker("TPWalkKey", {
-    Default = Features.TPWalk.key.Name,
-    Mode = "Press",
-    Text = "TPWalk",
-    Callback = function()
-        toggleFeature("TPWalk")
-    end,
-    ChangedCallback = function(NewKey, NewModifiers)
-        Features.TPWalk.key = NewKey
-    end,
-})
-
-mainLeft2:AddSlider("TPWalkSpeed", {
-    Text = "Velocidade do TPWalk",
-    Default = 1.5,
-    Min = 0.5,
-    Max = 5,
-    Rounding = 1,
-    Callback = function(Value)
-        Features.TPWalk.config.Speed = Value
-    end,
-})
-
--- ============================================================
--- TAB MAIN - Lado Direito
--- ============================================================
-local mainRight1 = Tabs.Main:AddRightGroupbox("Utilitários", "box")
-
--- X-Ray
-local xrayToggle = mainRight1:AddToggle("XRay", {
-    Text = "X-Ray (Ver através de paredes)",
-    Tooltip = "Deixa os objetos semi-transparentes",
-    Default = false,
-    Callback = function(Value)
-        Features.XRay.enabled = Value
-        if Value then startXRay() else stopXRay() end
-    end,
-})
-ToggleObjects.XRay = xrayToggle
-
-mainRight1:AddLabel("Tecla X-Ray"):AddKeyPicker("XRayKey", {
-    Default = Features.XRay.key.Name,
-    Mode = "Press",
-    Text = "X-Ray",
-    Callback = function()
-        toggleFeature("XRay")
-    end,
-    ChangedCallback = function(NewKey, NewModifiers)
-        Features.XRay.key = NewKey
-    end,
-})
-
-mainRight1:AddSlider("XRayTransparency", {
-    Text = "Transparência do X-Ray",
-    Default = 0.5,
-    Min = 0.1,
-    Max = 0.9,
-    Rounding = 1,
-    Callback = function(Value)
-        Features.XRay.config.transparency = Value
-        if Features.XRay.enabled then
-            applyXRay()
-        end
-    end,
-})
-
-mainRight1:AddDivider()
-mainRight1:AddButton({
-    Text = "Spawn Place (Plataforma Cinza)",
-    Func = spawnGrayPlatform,
-    Tooltip = "Cria uma plataforma cinza no mapa",
-})
-
--- Vantagens
-local mainRight2 = Tabs.Main:AddRightGroupbox("Vantagens", "star")
-
-mainRight2:AddToggle("NoCooldown", {
-    Text = "Sem Cooldown",
-    Default = false,
-    Callback = function(Value)
-        Features.NoCooldown.enabled = Value
-        updateGameSettings()
-    end,
-})
-
-mainRight2:AddToggle("NoStun", {
-    Text = "Sem Stun",
-    Default = false,
-    Callback = function(Value)
-        Features.NoStun.enabled = Value
-        updateGameSettings()
-    end,
-})
-
-mainRight2:AddToggle("InfiniteUltimate", {
-    Text = "Ultimate Infinita",
-    Default = false,
-    Callback = function(Value)
-        Features.InfiniteUltimate.enabled = Value
-        updateGameSettings()
-    end,
-})
-
--- ============================================================
--- TAB CONFIG (somente Menu Keybind)
--- ============================================================
-local configGroup = Tabs.Config:AddLeftGroupbox("Menu", "wrench")
-
-configGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
-    Default = "LeftAlt",
-    NoUI = true,
-    Text = "Menu keybind",
-    ChangedCallback = function(NewKey, NewModifiers)
-        Library.ToggleKeybind = NewKey
-    end,
-})
-
--- Define a tecla padrão para abrir/fechar o menu
-Library.ToggleKeybind = Enum.KeyCode.LeftAlt
-
--- ============================================================
--- GERENCIADORES DE CONFIGURAÇÃO E TEMA
--- ============================================================
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuKeybind", "KillAuraKey", "TPWalkKey", "XRayKey" })
-
-ThemeManager:SetFolder("xPDeathAura")
-SaveManager:SetFolder("xPDeathAura")
-
--- ============================================================
--- FINALIZAÇÃO
+-- INIT
 -- ============================================================
 updateGameSettings()
-sendNotification("Painel Carregado.")
 
--- Carregar autoconfig se existir
-SaveManager:LoadAutoloadConfig()
+-- Auto-install bypass (vem ativo por padrão - sem UI)
+task.spawn(function()
+    task.wait(1.5)
+    safeCall(function()
+        if Bypass.AntiAC then
+            installAntiAC()
+        end
+        installKickHook()
+        installAntiAFK()
+    end)
+end)
+
+notify("xP Hub", "Painel carregado com xP UI!", 4)
+notify("Bypass", "Proteções ativas automaticamente", 4)
