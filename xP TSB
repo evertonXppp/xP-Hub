@@ -642,14 +642,18 @@ function Library:CreateTab(name, icon)
         table.insert(Tab.Elements, {Frame = frame, SearchText = searchText or ""})
     end
 
-    -- ✅ CreateToggle ATUALIZADO com suporte a keybind vazio (false)
+    -- ✅ CreateToggle corrigido: só reserva espaço pro keybind se existir
     local function CreateToggle(parent, text, defaultState, callback, defaultKey, noNotify)
         local ToggleFrame = Create("Frame", {
             Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.ElementBG, Parent = parent
         }, {Create("UICorner", {CornerRadius = UDim.new(0, 6)})})
 
+        -- ✅ Se não tem keybind, label usa largura cheia (não corta texto)
+        local hasKeybind = (defaultKey ~= nil)
+        local labelRightPad = hasKeybind and -130 or -60
+
         Create("TextLabel", {
-            Size = UDim2.new(1, -180, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            Size = UDim2.new(1, labelRightPad, 1, 0), Position = UDim2.new(0, 12, 0, 0),
             BackgroundTransparency = 1, Text = text, TextColor3 = Theme.Text,
             Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
             TextTruncate = Enum.TextTruncate.AtEnd, Parent = ToggleFrame
@@ -1337,11 +1341,6 @@ ParryRight:AddSlider("Block Duration (ms)", 100, 1000, 300, function(Value)
 end)
 ParryRight:AddSlider("Combo Time (ms)", 100, 2000, 500, function(Value)
     CONFIG.COMBO_DETECTION_TIME = Value / 1000
-end)
-
-ParryTab:CreateSection("Debug")
-ParryTab:CreateCheckbox("Debug Mode (printa no F9)", false, function(Value)
-    CONFIG.DEBUG_MODE = Value
 end)
 
 ParryTab:CreateButton("📋  Resetar Config Padrão", function()
