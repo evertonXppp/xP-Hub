@@ -1,5 +1,5 @@
 -- ============================================================
--- xP Hub - Blade Ball (xP UI nova + Toggle corrigido + Keybind OK)
+-- xP Hub - Blade Ball (Detecção Híbrida + Combat Unificado)
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -64,6 +64,9 @@ local savedLighting = {}
 local savedParticleStates = {}
 local initialFOV = workspace.CurrentCamera.FieldOfView or 70
 
+local PreviousPosition = nil
+local BallShadow, BallObject = nil, nil
+
 local Settings = {
     AutoParry = false,
     PanicAbility = false,
@@ -75,6 +78,8 @@ local Settings = {
     SpamSpeed = 5,
     Otimizacao = false,
     Humanize = true,
+    SpeedThreshold = 85,
+    UseAccuracy = true,
 }
 
 -- ============================================================
@@ -164,6 +169,21 @@ end
 local function IsTargeted(ball)
     if not ball then return false end
     return ball:GetAttribute("target") == Player.Name
+end
+
+local function GetBallColor(target)
+    if not target then return Color3.new(1, 1, 1) end
+    local highlight = target:FindFirstChildOfClass("Highlight")
+    if highlight then return highlight.FillColor end
+    return (target:IsA("BasePart") and target.Color) or Color3.new(1, 1, 1)
+end
+
+local function GetVisualHeight(shadow)
+    if not shadow then return 0 end
+    local ok, h = pcall(function()
+        return math.min(((math.max(0, shadow.Size.X - 5)) * 20) + 3, 100)
+    end)
+    return ok and h or 0
 end
 
 local function GetDistanceToBall(ball)
@@ -274,48 +294,101 @@ local function AutoSpamLogic()
     end
 end
 
-RunService.PreSimulation:Connect(function()
+-- ============================================================
+-- LOOP PRINCIPAL
+-- ============================================================
+RunService.RenderStepped:Connect(function(dt)
     if AutoWinActive then AutoWinLogic(); return end
-    if Settings.AutoParry or Settings.PanicAbility then
-        local ball = GetRealBall()
-        if not ball then return end
-        local char = Player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        local distance = GetDistanceToBall(ball)
-        local velocity = GetBallSpeed(ball)
-        if velocity < 3 then return end
-        local timeToImpact = (distance - 2.5) / velocity
+    if not (Settings.AutoParry or Settings.PanicAbility) then return end
 
-        pcall(function()
-            ball:GetAttributeChangedSignal("target"):Connect(function()
-                local target = ball:GetAttribute("target")
-                local nearest = GetNearestPlayer()
-                if nearest then
-                    if target == nearest.Name or target == Player.Name then
-                        ParryCounter = ParryCounter + 1
-                    else
-                        ParryCounter = 0
-                    end
+    local char = Player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then PreviousPosition = nil; return end
+
+    local charPos = hrp.Position
+
+    local ball = GetRealBall()
+    BallShadow = (BallShadow and BallShadow.Parent) and BallShadow
+        or (Workspace:FindFirstChild("FX") and Workspace.FX:FindFirstChild("BallShadow"))
+    BallObject = ball or (BallObject and BallObject.Parent and BallObject) or Workspace:FindFirstChild("Ball")
+
+    if not ball and not BallShadow then PreviousPosition = nil; return end
+
+    local currentPos
+    if ball then
+        currentPos = ball.Position
+    elseif BallShadow then
+        local height = GetVisualHeight(BallShadow)
+        currentPos = Vector3.new(
+            BallShadow.Position.X,
+            BallShadow.Position.Y + height,
+            BallShadow.Position.Z
+        )
+    else
+        PreviousPosition = nil; return
+    end
+
+    local ballColor = GetBallColor(ball or BallObject)
+    local isRealBall = ballColor ~= Color3.new(1, 1, 1)
+
+    if PreviousPosition and isRealBall then
+        local velocityVector = (currentPos - PreviousPosition) / dt
+        local velocityMagnitude = velocityVector.Magnitude
+
+        local shouldParry = false
+        local distance = (charPos - currentPos).Magnitude
+
+        local dirToPlayer = (charPos - currentPos).Unit
+        local velDir = velocityVector.Unit
+        local accuracy = Settings.UseAccuracy and velDir:Dot(dirToPlayer) or 1
+
+        local curveDelay = math.clamp((1 - accuracy) * 0.1, 0, 0.15)
+
+        if velocityMagnitude < Settings.SpeedThreshold then
+            local leadTime = math.clamp(0.05 + (velocityMagnitude / 600), 0.05, 0.2)
+            local predictedPos = currentPos + velocityVector * leadTime
+            local flatDistance = (Vector3.new(charPos.X, 0, charPos.Z) - Vector3.new(predictedPos.X, 0, predictedPos.Z)).Magnitude
+            local dynamicDistance = math.clamp(12 + velocityMagnitude * 0.05, 8, 55)
+
+            if flatDistance <= (dynamicDistance - (curveDelay * 10)) then
+                shouldParry = true
+            end
+        else
+            if accuracy > 0.15 then
+                local timeToImpact = distance / velocityMagnitude
+                local reactionWindow = 0.1 + (dt * 1.5) - curveDelay
+                reactionWindow = math.max(reactionWindow, Settings.ReactionTime * 0.5)
+
+                if timeToImpact <= reactionWindow then
+                    shouldParry = true
                 end
-            end)
-        end)
-
-        AutoDetectSpamLogic(ball)
-        AutoSpamLogic()
-
-        if Settings.AutoParry and IsTargeted(ball) and timeToImpact <= Settings.ReactionTime then
-            if not Parried then
-                SendParry()
-                Parried = true
-                task.delay(Settings.Humanize and (0.4 + math.random() * 0.2) or 0.5, function() Parried = false end)
             end
         end
 
-        if Settings.PanicAbility and distance <= Settings.PanicDistance then
+        if shouldParry then
+            local jitter = math.random() * 0.02
+            local safeDelay = math.clamp(0.02 + (velocityMagnitude / 250), 0.01, 0.1)
+
+            if (tick() - LastParry) > (safeDelay + jitter) then
+                SendParry()
+                LastParry = tick()
+            end
+        end
+    end
+
+    if Settings.PanicAbility and ball then
+        local dist = GetDistanceToBall(ball)
+        if dist <= Settings.PanicDistance then
             SendAbility()
         end
     end
+
+    if ball then
+        AutoDetectSpamLogic(ball)
+        AutoSpamLogic()
+    end
+
+    PreviousPosition = currentPos
 end)
 
 pcall(function()
@@ -526,50 +599,24 @@ function Library:CreateTab(name, icon)
         local state = defaultState
         table.insert(CreatedElements.Toggles, {Btn = ToggleBtn, State = state})
         local myIndex = #CreatedElements.Toggles
-
         if defaultKey then
             local KeyBtn = Create("TextButton", {Size = UDim2.new(0, 72, 0, 24), Position = UDim2.new(1, -58, 0.5, 0), AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = Theme.Sidebar, Text = "[" .. defaultKey.Name .. "]", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold, TextSize = 11, AutoButtonColor = false, ZIndex = 2, Parent = ToggleFrame}, {Create("UICorner", {CornerRadius = UDim.new(0, 4)})})
             table.insert(CreatedElements.Keybinds, {Btn = KeyBtn})
             local currentKey = defaultKey
             local listening = false
-            KeyBtn.MouseButton1Click:Connect(function()
-                listening = true
-                KeyBtn.Text = "[...]"
-                KeyBtn.TextColor3 = Theme.TextDim
-            end)
-            table.insert(ToggleKeybinds, {
-                Key = currentKey,
-                GetKey = function() return currentKey end,
-                SetKey = function(newKey) currentKey = newKey end,
-                State = function() return state end,
-                SetState = function(newState) state = newState end,
-                ToggleBtn = ToggleBtn,
-                Circle = Circle,
-                Callback = callback,
-                Text = text,
-                NoNotify = noNotify
-            })
+            KeyBtn.MouseButton1Click:Connect(function() listening = true; KeyBtn.Text = "[...]"; KeyBtn.TextColor3 = Theme.TextDim end)
+            table.insert(ToggleKeybinds, {Key = currentKey, GetKey = function() return currentKey end, SetKey = function(newKey) currentKey = newKey end, State = function() return state end, SetState = function(newState) state = newState end, ToggleBtn = ToggleBtn, Circle = Circle, Callback = callback, Text = text, NoNotify = noNotify})
             local keybindIndex = #ToggleKeybinds
             UserInputService.InputBegan:Connect(function(input, gpe)
                 if listening and not gpe and input.UserInputType == Enum.UserInputType.Keyboard then
                     ConsumedInputs[input] = true
                     if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
-                        currentKey = nil
-                        KeyBtn.Text = "[Nenhum]"
-                        KeyBtn.TextColor3 = Theme.TextDim
-                        listening = false
-                        ToggleKeybinds[keybindIndex].Key = nil
-                        return
+                        currentKey = nil; KeyBtn.Text = "[Nenhum]"; KeyBtn.TextColor3 = Theme.TextDim; listening = false; ToggleKeybinds[keybindIndex].Key = nil; return
                     end
-                    currentKey = input.KeyCode
-                    KeyBtn.Text = "[" .. currentKey.Name .. "]"
-                    KeyBtn.TextColor3 = Theme.Accent
-                    listening = false
-                    ToggleKeybinds[keybindIndex].Key = currentKey
+                    currentKey = input.KeyCode; KeyBtn.Text = "[" .. currentKey.Name .. "]"; KeyBtn.TextColor3 = Theme.Accent; listening = false; ToggleKeybinds[keybindIndex].Key = currentKey
                 end
             end)
         end
-
         ToggleBtn.MouseButton1Click:Connect(function()
             state = not state
             CreatedElements.Toggles[myIndex].State = state
@@ -578,7 +625,6 @@ function Library:CreateTab(name, icon)
             if not noNotify then NotifyToggle(text, state) end
             if callback then callback(state) end
         end)
-
         AddToSearch(ToggleFrame, text)
         return ToggleFrame
     end
@@ -832,6 +878,11 @@ function Library:CreateTab(name, icon)
         return CreateGroupbox(Tab.RightColumn, title)
     end
 
+    -- ✅ NOVO: Groupbox de largura total (não depende das colunas)
+    function TabObject:CreateGroupbox(title)
+        return CreateGroupbox(Tab.Page, title)
+    end
+
     function TabObject:CreateLogContainer()
         local LC = Create("ScrollingFrame", {Size = UDim2.new(1,0,1,-40), BackgroundColor3 = Theme.ElementBG, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Accent, CanvasSize = UDim2.new(0,0,0,0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ElasticBehavior = Enum.ElasticBehavior.Never, Parent = Tab.Page}, {Create("UICorner", {CornerRadius = UDim.new(0,6)}), Create("UIListLayout", {Padding = UDim.new(0,6), SortOrder = Enum.SortOrder.LayoutOrder}), Create("UIPadding", {PaddingTop = UDim.new(0,10), PaddingLeft = UDim.new(0,12), PaddingRight = UDim.new(0,12), PaddingBottom = UDim.new(0,10)})})
         function TabObject:AddLog(message)
@@ -864,9 +915,7 @@ function Library:CreateTab(name, icon)
     return TabObject
 end
 
--- ============================================================
--- PROCESSAMENTO GLOBAL DOS KEYBINDS DE TOGGLE
--- ============================================================
+-- Keybind global
 UserInputService.InputBegan:Connect(function(input, gpe)
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if ConsumedInputs[input] then ConsumedInputs[input] = nil; return end
@@ -894,25 +943,40 @@ HomeTab:CreateSection("Informações do Usuário")
 HomeTab:CreateInfoCard("Nome", Player.DisplayName)
 HomeTab:CreateInfoCard("Username", "@" .. Player.Name)
 HomeTab:CreateInfoCard("ID", tostring(Player.UserId))
+HomeTab:CreateSection("Sistema de Detecção")
+HomeTab:CreateInfoCard("RealBall + BallShadow", "✅ Ativo")
+HomeTab:CreateInfoCard("Predição (leadTime)", "✅ Ativo")
+HomeTab:CreateInfoCard("Accuracy (dot)", "✅ Ativo")
 HomeTab:CreateSection("Atalhos")
 HomeTab:CreateButton("⚔️  Abrir Combat", function() xP_UI:SelectTab("Combat") end)
 HomeTab:CreateButton("👁️  Abrir Visual", function() xP_UI:SelectTab("Visual") end)
 HomeTab:CreateButton("📋  Ver Logs", function() xP_UI:SelectTab("Logs") end)
 HomeTab:CreateButton("⚙️  Abrir Config", function() xP_UI:SelectTab("Config") end)
 
+-- ⚔️ COMBAT (agora com Detecção integrada)
 local CombatTab = xP_UI:CreateTab("Combat", "⚔️")
 CombatTab:CreateSearchBar("Pesquisar...")
+
+-- Linha 1: Auto Parry (esquerda) + Habilidades & AutoWin (direita)
 local LC = CombatTab:AddLeftGroupbox("Auto Parry")
 LC:AddToggle("AUTO PARRY", false, function(s) Settings.AutoParry = s end)
 LC:AddToggle("AUTO SPAM", false, function(s) Settings.AutoSpam = s end)
 LC:AddToggle("AUTO DETECT SPAM", false, function(s) Settings.AutoDetectSpam = s; AutoDetectSpamActive = s end)
 LC:AddSlider("SPAM SPEED", 1, 20, 5, function(v) Settings.SpamSpeed = v end)
+
 local RC = CombatTab:AddRightGroupbox("Habilidades & AutoWin")
 RC:AddToggle("PANIC ABILITY", false, function(s) Settings.PanicAbility = s end)
 RC:AddToggle("AUTO WIN (SEM LOCK-ON)", false, function(s) Settings.AutoWin = s; AutoWinActive = s end)
 RC:AddSlider("PANIC DISTANCE", 5, 100, 25, function(v) Settings.PanicDistance = v end)
-RC:AddSlider("TEMPO REAÇÃO (x100)", 10, 100, 38, function(v) Settings.ReactionTime = v / 100 end)
 
+-- Linha 2 (embaixo): Detecção Avançada (largura total)
+local DetectSection = CombatTab:CreateSection("🎯 Detecção Avançada")
+local DetectBox = CombatTab:CreateGroupbox("Configurações de Detecção")
+DetectBox:AddToggle("USAR ACCURACY (DOT)", true, function(s) Settings.UseAccuracy = s end)
+DetectBox:AddSlider("SPEED THRESHOLD", 20, 200, 85, function(v) Settings.SpeedThreshold = v end)
+DetectBox:AddSlider("TEMPO REAÇÃO (x100)", 10, 100, 38, function(v) Settings.ReactionTime = v / 100 end)
+
+-- VISUAL
 local VisualTab = xP_UI:CreateTab("Visual", "👁️")
 VisualTab:CreateSearchBar("Pesquisar...")
 local LV = VisualTab:AddLeftGroupbox("Câmera")
@@ -923,21 +987,25 @@ RV:AddToggle("OTIMIZAÇÃO (FPS)", false, function(s)
     Library:Notify("Otimização", s and "Ativado!" or "Desativado", 2)
 end)
 
+-- LOGS
 local LogsTab = xP_UI:CreateTab("Logs", "📋")
 LogsTab:CreateSection("Histórico")
 LogsTab:CreateLogContainer()
 LogsTab:AddLog("── LEGENDA ────────────────────")
 LogsTab:AddLog("[+] Nova função")
 LogsTab:AddLog("[=] Correção")
+LogsTab:AddLog("[-] Removido")
 LogsTab:AddLog("──────────────────────────────")
 LogsTab:AddLog("")
-LogsTab:AddLog("[=] Keybind do menu CORRIGIDA")
-LogsTab:AddLog("[=] Toggle texto cortado corrigido")
-LogsTab:AddLog("[+] Bypass Seguro aplicado")
-LogsTab:AddLog("[=] Lock-On removido do AutoWin")
-LogsTab:AddLog("[+] Humanização de timings")
-LogsTab:AddLog("[+] xP Hub com Blade Ball no topo")
+LogsTab:AddLog("[=] Aba Detecção movida para dentro do Combat")
+LogsTab:AddLog("[+] Combat agora tem 3 seções organizadas")
+LogsTab:AddLog("[+] Detecção Híbrida: RealBall + BallShadow")
+LogsTab:AddLog("[+] Predição de trajetória (leadTime)")
+LogsTab:AddLog("[+] Accuracy via dot product")
+LogsTab:AddLog("[-] Raycast IsPathBlocked removido")
+LogsTab:AddLog("[-] Ping Adaptativo removido")
 
+-- CONFIG
 local ConfigTab = xP_UI:CreateTab("Config", "⚙️")
 ConfigTab:CreateSearchBar("Pesquisar...")
 ConfigTab:CreateSection("Interface & Keys")
@@ -957,12 +1025,10 @@ ConfigTab:CreateSection("Unload")
 ConfigTab:CreateRedButton("Unload Script", function() xP_UI.ScreenGui:Destroy() end)
 
 -- ============================================================
--- KEYBIND DO MENU (Toggle UI) — CORRIGIDO
+-- KEYBIND DO MENU
 -- ============================================================
 local uiVisible = true
-
 UserInputService.InputBegan:Connect(function(input, gpe)
-    -- ✅ NÃO checa `gpe` porque LeftAlt pode vir marcado como processado
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == ToggleKey then
             uiVisible = not uiVisible
@@ -971,4 +1037,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-xP_UI:Notify("xP Hub", "Script carregado!", 4)
+xP_UI:Notify("xP Hub", "Combat com Detecção integrada!", 4)
